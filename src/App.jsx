@@ -19,7 +19,7 @@ const VideoTile = ({ stream, label, isLocal }) => {
     <div className="video-tile glass">
       <video ref={videoRef} autoPlay playsInline muted={isLocal} />
       <div className="video-info">
-        {isLocal ? <Video size={14} /> : <Users size={14} />}
+        {isLocal ? <Video size={16} /> : <Users size={16} />}
         <span>{label}</span>
       </div>
     </div>
@@ -37,7 +37,7 @@ function App() {
 
   const { 
     localStream, remoteStreams, messages, reactions, 
-    connected, sendMessage, sendReaction 
+    connected, activeSlot, sendMessage, sendReaction 
   } = useFamilySync(inCall ? roomId : null, userId);
 
   const handleJoin = () => {
@@ -70,28 +70,26 @@ function App() {
     return (
       <div className="join-screen">
         <div className="join-card glass">
-          <div className="logo" style={{ justifyContent: 'center', marginBottom: '24px' }}>
-            <Video size={32} /> FamilyConnect
+          <div className="logo" style={{ justifyContent: 'center', marginBottom: '32px' }}>
+            <Video size={48} /> FamilyConnect
           </div>
-          <h2 style={{ marginBottom: '8px' }}>Üdvözlünk!</h2>
-          <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '24px' }}>
-            Lépj be a közös szobába.
+          <h2>Üdvözlünk!</h2>
+          <p style={{ fontSize: '1.1rem', color: 'var(--text-muted)', marginBottom: '32px' }}>
+            Lépj be a közös családi szobába.
           </p>
           <input 
             type="text" 
             className="chat-input" 
-            placeholder="A te neved" 
+            placeholder="Neved (pl. Balázs)" 
             value={userId}
             onChange={(e) => setUserId(e.target.value)}
-            style={{ width: '100%', marginBottom: '12px' }}
           />
           <input 
             type="text" 
             className="chat-input" 
-            placeholder="Szoba neve" 
+            placeholder="Szoba neve (pl. csaladi-kor)" 
             value={roomId}
             onChange={(e) => setRoomId(e.target.value)}
-            style={{ width: '100%' }}
           />
           <button className="join-btn" onClick={handleJoin}>Belépés</button>
         </div>
@@ -103,19 +101,24 @@ function App() {
     <div className="app-container">
       <header className="header glass">
         <div className="logo">
-          <Video size={20} /> FamilyConnect
+          <Video size={24} /> FamilyConnect
         </div>
-        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
           <button 
             className={`control-btn ${showChat ? 'active' : ''}`} 
-            style={{ width: '36px', height: '36px' }}
+            style={{ width: '40px', height: '40px' }}
             onClick={() => setShowChat(!showChat)}
           >
-            <MessageSquare size={18} />
+            <MessageSquare size={20} />
           </button>
-          <span style={{ fontSize: '0.7rem', color: connected ? '#4ade80' : '#f87171' }}>
-            ● {connected ? 'Online' : '...'}
-          </span>
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontSize: '0.8rem', color: connected ? '#4ade80' : '#f87171', fontWeight: '600' }}>
+              ● {connected ? 'Online' : 'Csatlakozás...'}
+            </div>
+            <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>
+              Szoba: {roomId} {activeSlot && `(#${activeSlot})`}
+            </div>
+          </div>
         </div>
       </header>
 
@@ -126,26 +129,27 @@ function App() {
             <VideoTile key={rs.id} stream={rs.stream} label="Résztvevő" />
           ))}
           {remoteStreams.length === 0 && (
-            <div className="glass" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '30px', textAlign: 'center', color: 'var(--text-muted)' }}>
-              Várakozás a többiekre... <br/>
-              <span style={{ fontSize: '0.7rem' }}>Szoba: {roomId}</span>
+            <div className="glass" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>
+              <div style={{ marginBottom: '16px', fontSize: '1.2rem' }}>Várakozás a többiekre...</div>
+              <div style={{ fontSize: '0.9rem' }}>A(z) "{roomId}" szobában vagy.</div>
+              <div style={{ fontSize: '0.8rem', marginTop: '8px' }}>Győződj meg róla, hogy mindenki ugyanezt a szobanevet írta be!</div>
             </div>
           )}
         </div>
 
         <aside className={`chat-panel glass ${showChat ? 'active' : ''}`}>
-          <div className="header" style={{ height: '48px', borderBottom: '1px solid var(--glass-border)', padding: '0 12px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <MessageSquare size={16} /> Csevegés
+          <div className="header" style={{ height: '56px', borderBottom: '1px solid var(--glass-border)', padding: '0 16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontWeight: '600' }}>
+              <MessageSquare size={18} /> Csevegés
             </div>
-            <button className="control-btn" style={{ width: '32px', height: '32px' }} onClick={() => setShowChat(false)}>
-              <X size={16} />
+            <button className="control-btn" style={{ width: '36px', height: '36px' }} onClick={() => setShowChat(false)}>
+              <X size={20} />
             </button>
           </div>
           <div className="chat-messages">
             {messages.map((msg, i) => (
               <div key={i} className={`message ${msg.sender === userId ? 'sent' : 'received'}`}>
-                <div style={{ fontSize: '0.7rem', opacity: 0.7, marginBottom: '2px' }}>{msg.sender}</div>
+                <div style={{ fontSize: '0.75rem', fontWeight: '600', marginBottom: '2px', opacity: 0.8 }}>{msg.sender}</div>
                 {msg.text}
               </div>
             ))}
@@ -154,12 +158,13 @@ function App() {
             <input 
               type="text" 
               className="chat-input" 
-              placeholder="Üzenet..." 
+              placeholder="Üzenet küldése..." 
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
+              style={{ marginBottom: 0 }}
             />
-            <button type="submit" className="control-btn active" style={{ width: '34px', height: '34px' }}>
-              <Send size={14} />
+            <button type="submit" className="control-btn active" style={{ width: '42px', height: '42px' }}>
+              <Send size={20} />
             </button>
           </form>
         </aside>
@@ -167,19 +172,19 @@ function App() {
 
       <div className="controls-bar glass">
         <button className={`control-btn ${isMuted ? 'danger' : 'active'}`} onClick={toggleMute}>
-          {isMuted ? <MicOff size={18} /> : <Mic size={18} />}
+          {isMuted ? <MicOff size={22} /> : <Mic size={22} />}
         </button>
         <button className={`control-btn ${isVideoOff ? 'danger' : 'active'}`} onClick={toggleVideo}>
-          {isVideoOff ? <VideoOff size={18} /> : <Video size={18} />}
+          {isVideoOff ? <VideoOff size={22} /> : <Video size={22} />}
         </button>
-        <div style={{ width: '1px', background: 'var(--glass-border)', margin: '0 4px' }} />
-        <button className="control-btn" onClick={() => sendReaction('❤️')}><Heart size={18} color="#fb7185" /></button>
-        <button className="control-btn" onClick={() => sendReaction('👍')}><ThumbsUp size={18} color="#60a5fa" /></button>
-        <button className="control-btn" onClick={() => sendReaction('😂')}><Laugh size={18} color="#fbbf24" /></button>
-        <button className="control-btn" onClick={() => sendReaction('👋')}><Hand size={18} color="#c084fc" /></button>
-        <div style={{ width: '1px', background: 'var(--glass-border)', margin: '0 4px' }} />
+        <div style={{ width: '1px', background: 'var(--glass-border)', margin: '0 8px' }} />
+        <button className="control-btn" onClick={() => sendReaction('❤️')}><Heart size={22} color="#fb7185" /></button>
+        <button className="control-btn" onClick={() => sendReaction('👍')}><ThumbsUp size={22} color="#60a5fa" /></button>
+        <button className="control-btn" onClick={() => sendReaction('😂')}><Laugh size={22} color="#fbbf24" /></button>
+        <button className="control-btn" onClick={() => sendReaction('👋')}><Hand size={22} color="#c084fc" /></button>
+        <div style={{ width: '1px', background: 'var(--glass-border)', margin: '0 8px' }} />
         <button className="control-btn danger" onClick={() => window.location.reload()}>
-          <PhoneOff size={18} />
+          <PhoneOff size={22} />
         </button>
       </div>
 
