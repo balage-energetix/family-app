@@ -41,7 +41,7 @@ export default function App() {
   const [showChat, setShowChat]   = useState(false);
   const chatRef = useRef();
 
-  const { remoteStreams, messages, reactions, peerStatus, peerNames, sendMessage, sendReaction }
+  const { remoteStreams, messages, reactions, peerStatus, peerStep, peerNames, sendMessage, sendReaction }
     = useFamilySync(session?.room ?? null, session?.name ?? null, localStream);
 
   // Auto-scroll chat
@@ -151,6 +151,20 @@ export default function App() {
     );
   }
 
+  // ── SCREEN 3b: PeerJS error ──────────────────────────
+  if (peerStatus === 'error') {
+    return (
+      <div className="join-screen">
+        <div className="join-card glass" style={{ textAlign: 'center' }}>
+          <AlertCircle size={52} color="#ef4444" style={{ margin: '0 auto 20px' }} />
+          <h2>Kapcsolódási hiba</h2>
+          <p style={{ color: 'var(--muted)', marginTop: 12, lineHeight: 1.6, fontSize: '0.9rem' }}>{peerStep}</p>
+          <button className="join-btn" style={{ marginTop: 24 }} onClick={() => window.location.reload()}>Újra próbálom</button>
+        </div>
+      </div>
+    );
+  }
+
   // ── SCREEN 4: Call ───────────────────────────────────
   return (
     <div className="app-container">
@@ -160,6 +174,9 @@ export default function App() {
           <div className={`status-chip ${peerStatus === 'online' ? 'online' : 'connecting'}`}>
             {peerStatus === 'online' ? <><span className="dot" />Online</> : <><Loader size={12} className="spin" />Csatlakozás...</>}
           </div>
+          {peerStatus !== 'online' && peerStep && (
+            <span style={{ fontSize: '0.65rem', color: 'var(--muted)', maxWidth: 180, textAlign: 'right', lineHeight: 1.3 }}>{peerStep}</span>
+          )}
           <span className="room-label">{session.room}</span>
           <button className={`icon-btn ${showChat ? 'active' : ''}`} onClick={() => setShowChat(v => !v)} title="Csevegés">
             <MessageSquare size={18} />
