@@ -149,8 +149,8 @@ function App() {
           <div className="chat-messages">
             {messages.map((msg, i) => (
               <div key={i} className={`message ${msg.sender === userId ? 'sent' : 'received'}`}>
-                <div style={{ fontSize: '0.75rem', fontWeight: '600', marginBottom: '2px', opacity: 0.8 }}>{msg.sender}</div>
-                {msg.text}
+                <div className="message-sender">{msg.sender}</div>
+                <div>{msg.text}</div>
               </div>
             ))}
           </div>
