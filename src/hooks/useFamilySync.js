@@ -1,6 +1,16 @@
 import { useEffect, useState, useRef } from 'react';
 import { Peer } from 'peerjs';
 
+const STUN_CONFIG = {
+  config: {
+    iceServers: [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' },
+      { urls: 'stun:stun2.l.google.com:19302' },
+    ],
+  },
+};
+
 export const useFamilySync = (roomId, userId, localStream) => {
   const [remoteStreams, setRemoteStreams] = useState([]);
   const [messages, setMessages] = useState([]);
@@ -12,33 +22,43 @@ export const useFamilySync = (roomId, userId, localStream) => {
   const dataConns = useRef({});
   const mediaCalls = useRef({});
 
-  // Segédfunkció a videó hozzáadásához
   const addStream = (pid, stream) => {
     setRemoteStreams(prev => prev.find(s => s.id === pid) ? prev : [...prev, { id: pid, stream }]);
   };
 
-  // Segédfunkció a kapcsolatok kezeléséhez
-  const connectTo = (p, targetId) => {
-    if (dataConns.current[targetId] || targetId === p.id) return;
-
-    // Adatkapcsolat (Chat-hez)
-    const conn = p.connect(targetId);
-    conn.on('open', () => {
-      dataConns.current[targetId] = conn;
-      conn.send({ type: 'identity', name: userId });
-    });
+  const setupConn = (conn) => {
+    if (dataConns.current[conn.peer]) return;
+    dataConns.current[conn.peer] = conn;
+    
+    conn.on('open', () => conn.send({ type: 'hi', name: userId }));
     conn.on('data', (data) => {
-      if (data.type === 'identity') setPeerNames(prev => ({ ...prev, [targetId]: data.name }));
+      if (data.type === 'hi') {
+        setPeerNames(prev => ({ ...prev, [conn.peer]: data.name }));
+        // Ha mi vagyunk a hostok, küldjük el az összes ismert peer listáját az újnak
+        if (peerRef.current?.id.includes('_host')) {
+          const peers = Object.keys(dataConns.current).filter(id => id !== conn.peer);
+          conn.send({ type: 'list', peers });
+        }
+      }
+      if (data.type === 'list') {
+        data.peers.forEach(pid => connectTo(pid));
+      }
       if (data.type === 'chat') setMessages(prev => [...prev, { ...data, _id: Math.random() }]);
       if (data.type === 'reaction') setReactions(prev => [...prev, { ...data, _id: Math.random() }]);
     });
     conn.on('close', () => {
-      setRemoteStreams(prev => prev.filter(s => s.id !== targetId));
-      delete dataConns.current[targetId];
+      setRemoteStreams(prev => prev.filter(s => s.id !== conn.peer));
+      delete dataConns.current[conn.peer];
     });
+  };
 
-    // Videó hívás
-    const call = p.call(targetId, localStream);
+  const connectTo = (targetId) => {
+    if (!peerRef.current || dataConns.current[targetId] || targetId === peerRef.current.id) return;
+
+    const conn = peerRef.current.connect(targetId);
+    setupConn(conn);
+
+    const call = peerRef.current.call(targetId, localStream);
     call.on('stream', (stream) => {
       addStream(targetId, stream);
       mediaCalls.current[targetId] = call;
@@ -49,59 +69,48 @@ export const useFamilySync = (roomId, userId, localStream) => {
     if (!roomId || !userId || !localStream) return;
     setPeerStatus('connecting');
 
-    // Tisztított szobanév + Időbélyeg (10 percenként változik, hogy ne ragadjon be)
-    const timeBlock = Math.floor(Date.now() / 600000);
-    const baseId = roomId.replace(/[^a-z0-9]/gi, '').toLowerCase();
+    const cleanRoom = roomId.replace(/[^a-z0-9]/gi, '').toLowerCase();
+    const hostId = `${cleanRoom}_host`;
+    const myRandomId = `${cleanRoom}_user_${Math.random().toString(36).slice(2, 7)}`;
 
-    const trySlot = (slot) => {
-      if (slot > 10) { // 10 helyet nézünk meg, valahol biztos lesz hely
-        setPeerStatus('full');
-        return;
-      }
-
-      const myId = `${baseId}_${timeBlock}_${slot}`;
-      const p = new Peer(myId, {
-        config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] }
+    // 1. Megpróbálunk HOST lenni
+    const pHost = new Peer(hostId, STUN_CONFIG);
+    
+    pHost.on('open', () => {
+      peerRef.current = pHost;
+      setPeerStatus('online');
+      pHost.on('connection', setupConn);
+      pHost.on('call', (call) => {
+        call.answer(localStream);
+        call.on('stream', (s) => addStream(call.peer, s));
       });
+    });
 
-      p.on('open', () => {
-        peerRef.current = p;
-        setPeerStatus('online');
+    pHost.on('error', (err) => {
+      if (err.type === 'unavailable-id') {
+        // 2. Ha már van HOST, belépünk GUEST-ként egy véletlen ID-val
+        pHost.destroy();
+        const pGuest = new Peer(myRandomId, STUN_CONFIG);
+        
+        pGuest.on('open', () => {
+          peerRef.current = pGuest;
+          setPeerStatus('online');
+          
+          // Csatlakozunk a HOST-hoz
+          connectTo(hostId);
 
-        // Bejövő hívások fogadása
-        p.on('call', (call) => {
-          call.answer(localStream);
-          call.on('stream', (stream) => addStream(call.peer, stream));
-        });
-
-        // Bejövő adatkapcsolatok fogadása
-        p.on('connection', (conn) => {
-          conn.on('data', (data) => {
-            if (data.type === 'identity') setPeerNames(prev => ({ ...prev, [conn.peer]: data.name }));
-            if (data.type === 'chat') setMessages(prev => [...prev, { ...data, _id: Math.random() }]);
-            if (data.type === 'reaction') setReactions(prev => [...prev, { ...data, _id: Math.random() }]);
+          pGuest.on('connection', setupConn);
+          pGuest.on('call', (call) => {
+            call.answer(localStream);
+            call.on('stream', (s) => addStream(call.peer, s));
           });
         });
 
-        // Próbálunk csatlakozni az összes többi lehetséges slothoz
-        for (let i = 1; i <= 10; i++) {
-          const targetId = `${baseId}_${timeBlock}_${i}`;
-          if (targetId !== myId) connectTo(p, targetId);
-        }
-      });
-
-      p.on('error', (err) => {
-        p.destroy();
-        if (err.type === 'unavailable-id') {
-          trySlot(slot + 1); // Ha foglalt, jön a következő slot
-        } else {
-          // Egyéb hiba esetén is próbálunk egy másikat
-          setTimeout(() => trySlot(slot + 1), 500);
-        }
-      });
-    };
-
-    trySlot(1);
+        pGuest.on('error', () => setPeerStatus('error'));
+      } else {
+        setPeerStatus('error');
+      }
+    });
 
     return () => {
       if (peerRef.current) peerRef.current.destroy();
