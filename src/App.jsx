@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Video, VideoOff, Mic, MicOff, Send, PhoneOff, 
-  Users, MessageSquare, Heart, ThumbsUp, Laugh, Hand, X
+  Users, MessageSquare, Heart, ThumbsUp, Laugh, Hand, X, User
 } from 'lucide-react';
 import { useFamilySync } from './hooks/useFamilySync';
 import './index.css';
@@ -30,6 +30,7 @@ function App() {
   const [inCall, setInCall] = useState(false);
   const [roomId, setRoomId] = useState('csaladi-kor');
   const [userId, setUserId] = useState('');
+  const [roleIndex, setRoleIndex] = useState(null);
   const [inputText, setInputText] = useState('');
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoOff, setIsVideoOff] = useState(false);
@@ -37,11 +38,16 @@ function App() {
 
   const { 
     localStream, remoteStreams, messages, reactions, 
-    connected, activeSlot, peerNames, sendMessage, sendReaction, reconnect 
-  } = useFamilySync(inCall ? roomId : null, userId);
+    connected, peerNames, sendMessage, sendReaction 
+  } = useFamilySync(inCall ? roomId : null, userId, roleIndex);
 
-  const handleJoin = () => {
-    if (userId.trim() && roomId.trim()) setInCall(true);
+  const handleJoin = (role) => {
+    if (userId.trim()) {
+      setRoleIndex(role);
+      setInCall(true);
+    } else {
+      alert('Kérlek írd be a neved!');
+    }
   };
 
   const handleSendMessage = (e) => {
@@ -75,23 +81,23 @@ function App() {
           </div>
           <h2>Üdvözlünk!</h2>
           <p style={{ fontSize: '1.1rem', color: 'var(--text-muted)', marginBottom: '32px' }}>
-            Lépj be a közös családi szobába.
+            Válassz egy szerepkört a szobában.
           </p>
           <input 
             type="text" 
             className="chat-input" 
-            placeholder="Neved (pl. Balázs)" 
+            placeholder="A te neved" 
             value={userId}
             onChange={(e) => setUserId(e.target.value)}
           />
-          <input 
-            type="text" 
-            className="chat-input" 
-            placeholder="Szoba neve (legyen közös!)" 
-            value={roomId}
-            onChange={(e) => setRoomId(e.target.value)}
-          />
-          <button className="join-btn" onClick={handleJoin}>Belépés</button>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', marginTop: '10px' }}>
+            <button className="join-btn" style={{ fontSize: '0.9rem', padding: '12px' }} onClick={() => handleJoin(1)}>1. Tag</button>
+            <button className="join-btn" style={{ fontSize: '0.9rem', padding: '12px' }} onClick={() => handleJoin(2)}>2. Tag</button>
+            <button className="join-btn" style={{ fontSize: '0.9rem', padding: '12px' }} onClick={() => handleJoin(3)}>3. Tag</button>
+          </div>
+          <div style={{ marginTop: '20px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+            Mindenki más számot válasszon! (pl. Anyu: 1, Tesó: 2, Te: 3)
+          </div>
         </div>
       </div>
     );
@@ -116,7 +122,7 @@ function App() {
               ● {connected ? 'Online' : 'Csatlakozás...'}
             </div>
             <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>
-              Szoba: {roomId} {activeSlot && `(v3-#${activeSlot})`}
+              Szerepkör: {roleIndex}. tag
             </div>
           </div>
         </div>
@@ -131,14 +137,8 @@ function App() {
           {remoteStreams.length === 0 && (
             <div className="glass" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>
               <div style={{ marginBottom: '16px', fontSize: '1.2rem' }}>Várakozás a többiekre...</div>
-              <div style={{ fontSize: '0.9rem' }}>A(z) "{roomId}" szobában vagy.</div>
-              <button 
-                onClick={reconnect}
-                className="join-btn" 
-                style={{ width: 'auto', padding: '8px 20px', marginTop: '20px', fontSize: '0.9rem' }}
-              >
-                Újracsatlakozás
-              </button>
+              <div style={{ fontSize: '0.9rem' }}>Te vagy a(z) {roleIndex}. tag.</div>
+              <div style={{ fontSize: '0.8rem', marginTop: '8px' }}>Szólj a többieknek, hogy a másik két számot válasszák!</div>
             </div>
           )}
         </div>
@@ -154,7 +154,7 @@ function App() {
           </div>
           <div className="chat-messages">
             {messages.map((msg, i) => (
-              <div key={i} className={`message ${msg.sender === userId ? 'sent' : 'received'}`}>
+              <div key={msg.id || i} className={`message ${msg.sender === userId ? 'sent' : 'received'}`}>
                 <div className="message-sender">{msg.sender}</div>
                 <div>{msg.text}</div>
               </div>

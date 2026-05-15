@@ -1,19 +1,17 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { Peer } from 'peerjs';
 
-export const useFamilySync = (roomId, userId) => {
+export const useFamilySync = (roomId, userId, roleIndex) => {
   const [localStream, setLocalStream] = useState(null);
   const [remoteStreams, setRemoteStreams] = useState([]);
   const [messages, setMessages] = useState([]);
   const [reactions, setReactions] = useState([]);
   const [connected, setConnected] = useState(false);
-  const [activeSlot, setActiveSlot] = useState(null);
   const [peerNames, setPeerNames] = useState({});
   
   const peerRef = useRef(null);
-  const connectionsRef = useRef({}); 
-  const callsRef = useRef({});
-  const intervalRef = useRef(null);
+  const connectionsRef = useRef({}); // peerId -> connection
+  const callsRef = useRef({}); // peerId -> call
 
   const addRemoteStream = useCallback((peerId, stream) => {
     setRemoteStreams(prev => {
@@ -34,9 +32,11 @@ export const useFamilySync = (roomId, userId) => {
       if (data.type === 'identity') {
         setPeerNames(prev => ({ ...prev, [conn.peer]: data.name }));
       } else if (data.type === 'chat') {
-        setMessages(prev => [...prev, { ...data, timestamp: Date.now() }]);
+        // Prevent duplicate messages by checking a simple hash/id if needed, 
+        // but with fix roles, duplicates are naturally avoided.
+        setMessages(prev => [...prev, { ...data, timestamp: Date.now(), id: Math.random() }]);
       } else if (data.type === 'reaction') {
-        setReactions(prev => [...prev, { ...data, id: Math.random(), timestamp: Date.now() }]);
+        setReactions(prev => [...prev, { ...data, id: Math.random() }]);
       }
     });
 
@@ -46,110 +46,66 @@ export const useFamilySync = (roomId, userId) => {
     });
   }, [userId]);
 
-  const startDiscovery = useCallback((peer, stream, mySlot) => {
-    if (intervalRef.current) clearInterval(intervalRef.current);
-    
-    intervalRef.current = setInterval(() => {
-      if (!peer || peer.destroyed) return;
-      
-      for (let i = 1; i <= 6; i++) { // Back to 6 slots to reduce noise
-        if (i === mySlot) continue;
-        const otherId = `${roomId}-v3-slot-${i}`;
-        
-        // Data connection check
-        if (!connectionsRef.current[otherId]) {
-          const conn = peer.connect(otherId, { reliable: true });
-          conn.on('open', () => setupDataConnection(conn));
-        }
+  useEffect(() => {
+    if (!roomId || !roleIndex) return;
 
-        // Call check - store call ref IMMEDIATELY to prevent double calling
-        if (!callsRef.current[otherId] && stream) {
-          const call = peer.call(otherId, stream);
-          callsRef.current[otherId] = call; // Mark as calling
-          
-          call.on('stream', (remoteStream) => {
-            addRemoteStream(otherId, remoteStream);
-          });
-          
-          call.on('close', () => {
-            delete callsRef.current[otherId];
-            setRemoteStreams(prev => prev.filter(s => s.id !== otherId));
-          });
+    const myPeerId = `${roomId}-member-${roleIndex}`;
+    const peer = new Peer(myPeerId);
+    peerRef.current = peer;
 
-          call.on('error', () => {
-            delete callsRef.current[otherId];
-          });
-        }
-      }
-    }, 4000); // Slower interval
-  }, [roomId, setupDataConnection, addRemoteStream]);
-
-  const initPeer = useCallback(async () => {
-    if (!roomId) return;
-    
-    peerRef.current?.destroy();
-    setRemoteStreams([]);
-    setConnected(false);
-
-    let stream = localStream;
-    if (!stream) {
+    const initMedia = async () => {
       try {
-        stream = await navigator.mediaDevices.getUserMedia({ 
-          video: { width: 1280, height: 720 }, 
-          audio: { echoCancellation: true, noiseSuppression: true } 
-        });
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
         setLocalStream(stream);
-      } catch (err) {
-        console.error('Media error', err);
-      }
-    }
-
-    for (let i = 1; i <= 6; i++) {
-      const potentialId = `${roomId}-v3-slot-${i}`;
-      const peer = new Peer(potentialId);
-      
-      const success = await new Promise((resolve) => {
-        peer.on('open', () => resolve(true));
-        peer.on('error', (err) => resolve(false));
-        setTimeout(() => resolve(false), 3000);
-      });
-
-      if (success) {
-        peerRef.current = peer;
-        setActiveSlot(i);
-        setConnected(true);
         
+        peer.on('open', () => {
+          setConnected(true);
+          
+          // Try to connect to the other 2 roles
+          const otherRoles = [1, 2, 3].filter(r => r !== roleIndex);
+          otherRoles.forEach(r => {
+            const otherPeerId = `${roomId}-member-${r}`;
+            
+            // Connect for Data
+            const conn = peer.connect(otherPeerId);
+            setupDataConnection(conn);
+
+            // Connect for Video
+            const call = peer.call(otherPeerId, stream);
+            call.on('stream', (remoteStream) => {
+              addRemoteStream(otherPeerId, remoteStream);
+              callsRef.current[otherPeerId] = call;
+            });
+          });
+        });
+
         peer.on('call', (call) => {
-          if (callsRef.current[call.peer]) return;
-          callsRef.current[call.peer] = call;
           call.answer(stream);
           call.on('stream', (remoteStream) => {
             addRemoteStream(call.peer, remoteStream);
+            callsRef.current[call.peer] = call;
           });
         });
 
         peer.on('connection', (conn) => setupDataConnection(conn));
-        startDiscovery(peer, stream, i);
-        break;
-      } else {
-        peer.destroy();
+      } catch (err) {
+        console.error('Media error', err);
       }
-    }
-  }, [roomId, localStream, startDiscovery, setupDataConnection, addRemoteStream]);
-
-  useEffect(() => {
-    initPeer();
-    return () => {
-      peerRef.current?.destroy();
-      if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [roomId, initPeer]);
+
+    initMedia();
+
+    return () => {
+      peer.destroy();
+      localStream?.getTracks().forEach(t => t.stop());
+    };
+  }, [roomId, roleIndex, setupDataConnection, addRemoteStream]);
 
   const sendMessage = (text) => {
-    const msg = { type: 'chat', sender: userId, text };
-    Object.values(connectionsRef.current).forEach(conn => {
-      if (conn.open) conn.send(msg);
-    });
+    const msg = { type: 'chat', sender: userId, text, msgId: Math.random() };
+    // Send only to UNIQUE open connections
+    const uniqueConns = Object.values(connectionsRef.current).filter(c => c.open);
+    uniqueConns.forEach(conn => conn.send(msg));
     setMessages(prev => [...prev, { ...msg, timestamp: Date.now() }]);
   };
 
@@ -158,7 +114,7 @@ export const useFamilySync = (roomId, userId) => {
     Object.values(connectionsRef.current).forEach(conn => {
       if (conn.open) conn.send(reaction);
     });
-    setReactions(prev => [...prev, { ...reaction, id: Math.random(), timestamp: Date.now() }]);
+    setReactions(prev => [...prev, { ...reaction, id: Math.random() }]);
   };
 
   return {
@@ -167,10 +123,8 @@ export const useFamilySync = (roomId, userId) => {
     messages,
     reactions,
     connected,
-    activeSlot,
     peerNames,
     sendMessage,
-    sendReaction,
-    reconnect: initPeer
+    sendReaction
   };
 };
