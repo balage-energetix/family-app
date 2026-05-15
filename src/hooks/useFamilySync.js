@@ -1,32 +1,23 @@
 import { useEffect, useState, useRef } from 'react';
 import { Peer } from 'peerjs';
 
-// Generate a short random alphanumeric string (PeerJS safe)
 const randId = () => Math.random().toString(36).slice(2, 8);
+const safeRoom = (r) => r.replace(/[^a-z0-9]/gi, '').toLowerCase();
 
-export const useFamilySync = (roomId, userId) => {
-  const [localStream, setLocalStream]   = useState(null);
+export const useFamilySync = (roomId, userId, localStream) => {
   const [remoteStreams, setRemoteStreams] = useState([]);
-  const [messages, setMessages]         = useState([]);
-  const [reactions, setReactions]       = useState([]);
-  const [status, setStatus]             = useState('idle');
-  const [peerNames, setPeerNames]       = useState({});
-  const [mediaError, setMediaError]     = useState(null);
+  const [messages,     setMessages]      = useState([]);
+  const [reactions,    setReactions]     = useState([]);
+  const [peerStatus,   setPeerStatus]    = useState('idle'); // idle|connecting|online
+  const [peerNames,    setPeerNames]     = useState({});
 
-  // All mutable state lives in a ref so closures never go stale
   const R = useRef({
-    myPeer:   null,   // our own Peer (random ID)
-    hostPeer: null,   // only set if we are the host
-    myId:     null,
-    isHost:   false,
-    stream:   null,
-    dataConns: {},    // peerId → DataConnection
-    mediaCons: {},    // peerId → MediaConnection
-    members:  new Set(), // host only: IDs of everyone in room
-    memberConns: {},  // host only: peerId → DataConnection to host
+    myPeer: null, hostPeer: null,
+    myId: null, stream: null,
+    dataConns: {}, mediaCons: {},
+    members: new Set(), memberConns: {},
   });
 
-  // ── Stable helpers ────────────────────────────────────────
   const addStream = (pid, stream) =>
     setRemoteStreams(prev => prev.find(s => s.id === pid) ? prev : [...prev, { id: pid, stream }]);
 
@@ -35,245 +26,124 @@ export const useFamilySync = (roomId, userId) => {
     setPeerNames(prev => { const n = { ...prev }; delete n[pid]; return n; });
   };
 
-  // Setup a data channel (both sides)
   const setupData = (conn) => {
     const s = R.current;
     if (s.dataConns[conn.peer]?.open) return;
     s.dataConns[conn.peer] = conn;
-
-    conn.on('open', () => {
-      conn.send({ type: 'hello', name: userId });
-    });
-
-    conn.on('data', (msg) => {
-      if (msg.type === 'hello') {
-        setPeerNames(prev => ({ ...prev, [conn.peer]: msg.name }));
-
-      } else if (msg.type === 'peers') {
-        // Host told us who else is in the room — call each one
-        msg.list.forEach(pid => {
-          if (pid !== s.myId) callPeer(pid);
-        });
-
-      } else if (msg.type === 'chat') {
-        setMessages(prev => [...prev, { ...msg, id: randId(), ts: Date.now() }]);
-
-      } else if (msg.type === 'reaction') {
-        setReactions(prev => [...prev, { ...msg, id: randId() }]);
-      }
-    });
-
-    conn.on('close', () => {
-      delete s.dataConns[conn.peer];
-      removeStream(conn.peer);
-    });
-
-    conn.on('error', () => {
-      delete s.dataConns[conn.peer];
-    });
+    conn.on('open',  () => conn.send({ type: 'hello', name: userId }));
+    conn.on('data',  handleMsg.bind(null, conn.peer));
+    conn.on('close', () => { delete s.dataConns[conn.peer]; removeStream(conn.peer); });
+    conn.on('error', () => { delete s.dataConns[conn.peer]; });
   };
 
-  // Call a peer for video (one-directional initiation)
+  const handleMsg = (fromPeer, msg) => {
+    const s = R.current;
+    if (msg.type === 'hello') {
+      setPeerNames(prev => ({ ...prev, [fromPeer]: msg.name }));
+    } else if (msg.type === 'peers') {
+      msg.list.forEach(pid => { if (pid !== s.myId) callPeer(pid); });
+    } else if (msg.type === 'chat') {
+      setMessages(prev => [...prev, { ...msg, id: randId(), ts: Date.now() }]);
+    } else if (msg.type === 'reaction') {
+      setReactions(prev => [...prev, { ...msg, id: randId() }]);
+    }
+  };
+
   const callPeer = (pid) => {
     const s = R.current;
     if (!s.myPeer || pid === s.myId || s.mediaCons[pid]) return;
-    const stream = s.stream;
-    if (!stream) return;
-
-    // Data channel first (if not yet open)
     if (!s.dataConns[pid]?.open) {
       const conn = s.myPeer.connect(pid, { reliable: true });
       setupData(conn);
     }
-
-    const call = s.myPeer.call(pid, stream);
+    const call = s.myPeer.call(pid, s.stream);
     s.mediaCons[pid] = call;
     call.on('stream', remote => addStream(pid, remote));
     call.on('close',  () => { delete s.mediaCons[pid]; removeStream(pid); });
     call.on('error',  () => { delete s.mediaCons[pid]; });
   };
 
-  // ── Host logic ────────────────────────────────────────────
-  const startAsHost = (stream) => {
+  const startHost = (stream) => {
     const s = R.current;
-    // Safe host ID: only letters, numbers, single hyphens
-    const hostId = `fc-${roomId.replace(/[^a-z0-9]/gi, '')}-host`;
-    const hostPeer = new Peer(hostId);
-    s.hostPeer = hostPeer;
+    const hostId = `fc${safeRoom(roomId)}host`;
+    const hp = new Peer(hostId);
+    s.hostPeer = hp;
 
-    hostPeer.on('open', () => {
-      s.isHost = true;
+    hp.on('open', () => {
       s.members.add(s.myId);
-      console.log('[Host] Started as host:', hostId);
-
-      hostPeer.on('connection', (conn) => {
-        const guestId = conn.peer;
-
+      hp.on('connection', (conn) => {
+        const gid = conn.peer;
         conn.on('open', () => {
-          if (s.members.size >= 4) {
-            conn.send({ type: 'full' });
-            conn.close();
-            return;
-          }
-
-          // Send guest the current member list (excluding itself)
-          const existing = Array.from(s.members).filter(id => id !== guestId);
-          conn.send({ type: 'peers', list: existing });
-
-          // Track the guest
-          s.members.add(guestId);
-          s.memberConns[guestId] = conn;
-
-          // Tell existing members about the new guest
-          existing.filter(id => id !== s.myId).forEach(id => {
-            s.memberConns[id]?.send({ type: 'peers', list: [guestId] });
-          });
-
-          // Host calls the new guest for video
-          callPeer(guestId);
+          if (s.members.size >= 4) { conn.send({ type: 'full' }); conn.close(); return; }
+          conn.send({ type: 'peers', list: Array.from(s.members).filter(id => id !== gid) });
+          s.members.add(gid);
+          s.memberConns[gid] = conn;
+          Array.from(s.members)
+            .filter(id => id !== s.myId && id !== gid)
+            .forEach(id => s.memberConns[id]?.send({ type: 'peers', list: [gid] }));
+          callPeer(gid);
         });
-
-        conn.on('close', () => {
-          s.members.delete(guestId);
-          delete s.memberConns[guestId];
-        });
+        conn.on('close', () => { s.members.delete(gid); delete s.memberConns[gid]; });
       });
     });
 
-    hostPeer.on('error', (err) => {
-      // Host slot taken → join as guest
-      console.log('[Host] Slot taken, joining as guest. Err:', err.type);
-      s.hostPeer = null;
-      joinAsGuest(stream);
-    });
+    hp.on('error', () => { s.hostPeer = null; joinGuest(stream); });
   };
 
-  // ── Guest logic ───────────────────────────────────────────
-  const joinAsGuest = (stream) => {
+  const joinGuest = (stream) => {
     const s = R.current;
-    const hostId = `fc-${roomId.replace(/[^a-z0-9]/gi, '')}-host`;
-    console.log('[Guest] Connecting to host:', hostId);
-
+    const hostId = `fc${safeRoom(roomId)}host`;
     const conn = s.myPeer.connect(hostId, { reliable: true });
-
-    conn.on('open', () => {
-      console.log('[Guest] Connected to host');
-    });
-
     conn.on('data', (msg) => {
-      if (msg.type === 'full') {
-        setStatus('full');
-        return;
-      }
-      if (msg.type === 'peers') {
-        msg.list.forEach(pid => {
-          if (pid !== s.myId) callPeer(pid);
-        });
-      }
+      if (msg.type === 'full') { setPeerStatus('full'); return; }
+      if (msg.type === 'peers') msg.list.forEach(pid => { if (pid !== s.myId) callPeer(pid); });
     });
-
-    conn.on('close', () => {
-      // Host left — wait a moment then try to become new host
-      console.log('[Guest] Host disconnected. Taking over in 2s...');
-      setTimeout(() => startAsHost(stream), 2000);
-    });
-
-    conn.on('error', () => {
-      // Could not reach host yet — retry in 2 seconds
-      console.log('[Guest] Host not reachable, retrying...');
-      setTimeout(() => joinAsGuest(stream), 2000);
-    });
+    conn.on('close', () => setTimeout(() => startHost(stream), 1500));
+    conn.on('error', () => setTimeout(() => joinGuest(stream), 2000));
   };
 
-  // ── Main effect ───────────────────────────────────────────
+  // Main effect — runs only when we have a stream AND roomId/userId
   useEffect(() => {
-    if (!roomId || !userId) return;
+    if (!roomId || !userId || !localStream) return;
 
     const s = R.current;
-    setStatus('connecting');
+    s.stream = localStream;
+    setPeerStatus('connecting');
 
-    let cancelled = false;
+    const myId = `fcu${safeRoom(roomId)}${randId()}`;
+    s.myId = myId;
+    const peer = new Peer(myId);
+    s.myPeer = peer;
 
-    const run = async () => {
-      // 1. Get camera + mic
-      let stream = null;
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: { width: { ideal: 1280 }, height: { ideal: 720 } },
-          audio: { echoCancellation: true, noiseSuppression: true },
-        });
-        if (cancelled) { stream.getTracks().forEach(t => t.stop()); return; }
-        s.stream = stream;
-        setLocalStream(stream);
-      } catch (err) {
-        if (!cancelled) {
-          setMediaError(
-            err.name === 'NotAllowedError'
-              ? 'Kamera/mikrofon hozzáférés megtagadva. Engedélyezd a böngészőben, majd frissíts!'
-              : 'Nem sikerült elérni a kamerát vagy mikrofont.'
-          );
-        }
-        return;
-      }
-
-      // 2. Create our unique peer (PeerJS-safe alphanumeric ID)
-      const myId = `fc-${roomId.replace(/[^a-z0-9]/gi, '')}-u-${randId()}`;
-      s.myId = myId;
-      const myPeer = new Peer(myId);
-      s.myPeer = myPeer;
-
-      myPeer.on('open', () => {
-        if (cancelled) return;
-        console.log('[Peer] Open:', myId);
-        setStatus('connected');
-
-        // Handle incoming video calls
-        myPeer.on('call', (call) => {
-          const cid = call.peer;
-          if (s.mediaCons[cid]) return; // ignore duplicates
-          s.mediaCons[cid] = call;
-          call.answer(stream);
-          call.on('stream', remote => addStream(cid, remote));
-          call.on('close',  () => { delete s.mediaCons[cid]; removeStream(cid); });
-          call.on('error',  () => { delete s.mediaCons[cid]; });
-        });
-
-        // Handle incoming data connections
-        myPeer.on('connection', (conn) => setupData(conn));
-
-        // Try to become the room host first
-        startAsHost(stream);
+    peer.on('open', () => {
+      setPeerStatus('online');
+      peer.on('call', (call) => {
+        const cid = call.peer;
+        if (s.mediaCons[cid]) return;
+        s.mediaCons[cid] = call;
+        call.answer(localStream);
+        call.on('stream', remote => addStream(cid, remote));
+        call.on('close',  () => { delete s.mediaCons[cid]; removeStream(cid); });
       });
+      peer.on('connection', (conn) => setupData(conn));
+      startHost(localStream);
+    });
 
-      myPeer.on('error', (err) => {
-        console.error('[Peer] Error:', err.type, err.message);
-        if (!cancelled) setStatus('error');
-      });
-
-      myPeer.on('disconnected', () => {
-        if (!cancelled) myPeer.reconnect();
-      });
-    };
-
-    run();
+    peer.on('error', (err) => console.error('PeerJS error:', err.type));
+    peer.on('disconnected', () => peer.reconnect());
 
     return () => {
-      cancelled = true;
-      const s = R.current;
-      s.myPeer?.destroy();
+      peer.destroy();
       s.hostPeer?.destroy();
-      s.stream?.getTracks().forEach(t => t.stop());
       R.current = {
-        myPeer: null, hostPeer: null, myId: null, isHost: false, stream: null,
+        myPeer: null, hostPeer: null, myId: null, stream: null,
         dataConns: {}, mediaCons: {}, members: new Set(), memberConns: {},
       };
-      setLocalStream(null);
       setRemoteStreams([]);
-      setStatus('idle');
+      setPeerStatus('idle');
     };
-  }, [roomId, userId]); // eslint-disable-line
+  }, [roomId, userId, localStream]); // eslint-disable-line
 
-  // ── Send helpers ──────────────────────────────────────────
   const sendMessage = (text) => {
     const msg = { type: 'chat', sender: userId, text };
     Object.values(R.current.dataConns).forEach(c => { if (c.open) c.send(msg); });
@@ -286,9 +156,5 @@ export const useFamilySync = (roomId, userId) => {
     setReactions(prev => [...prev, { ...r, id: randId() }]);
   };
 
-  return {
-    localStream, remoteStreams, messages, reactions,
-    status, peerNames, mediaError,
-    sendMessage, sendReaction,
-  };
+  return { remoteStreams, messages, reactions, peerStatus, peerNames, sendMessage, sendReaction };
 };
