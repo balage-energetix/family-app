@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Peer } from 'peerjs';
 
 export const useFamilySync = (roomId, userId) => {
@@ -7,49 +7,101 @@ export const useFamilySync = (roomId, userId) => {
   const [messages, setMessages] = useState([]);
   const [reactions, setReactions] = useState([]);
   const [connected, setConnected] = useState(false);
-  const [peers, setPeers] = useState({}); // Tracking call objects
-
+  
   const peerRef = useRef(null);
-  const connectionsRef = useRef({}); // Tracking data connections
+  const connectionsRef = useRef({}); 
+  const callsRef = useRef({});
 
   useEffect(() => {
-    if (!roomId || !userId) return;
+    if (!roomId) return;
 
-    const peerId = `${roomId}-${userId}`;
-    const peer = new Peer(peerId);
-    peerRef.current = peer;
+    const initPeer = async () => {
+      // Get media stream first
+      let stream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        setLocalStream(stream);
+      } catch (err) {
+        console.error('Failed to get local stream', err);
+      }
 
-    peer.on('open', (id) => {
-      console.log('My peer ID is: ' + id);
-      setConnected(true);
-      
-      // Get media stream
-      navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-        .then((stream) => {
-          setLocalStream(stream);
-          
-          // Answer incoming calls
-          peer.on('call', (call) => {
-            call.answer(stream);
-            call.on('stream', (remoteStream) => {
-              addRemoteStream(call.peer, remoteStream);
-            });
-            setPeers(prev => ({ ...prev, [call.peer]: call }));
+      // Try to find an available slot in the room (1-5)
+      let foundPeer = false;
+      for (let i = 1; i <= 5; i++) {
+        const potentialId = `${roomId}-slot-${i}`;
+        const peer = new Peer(potentialId);
+        
+        const success = await new Promise((resolve) => {
+          peer.on('open', () => resolve(true));
+          peer.on('error', (err) => {
+            if (err.type === 'unavailable-id') resolve(false);
+            else resolve(true); // Other errors we just accept
           });
-        })
-        .catch(err => console.error('Failed to get local stream', err));
-    });
+          setTimeout(() => resolve(false), 3000);
+        });
 
-    // Handle data connections
-    peer.on('connection', (conn) => {
-      setupDataConnection(conn);
-    });
+        if (success) {
+          peerRef.current = peer;
+          setupPeerListeners(peer, stream, i);
+          foundPeer = true;
+          break;
+        } else {
+          peer.destroy();
+        }
+      }
+
+      if (!foundPeer) alert('A szoba megtelt!');
+    };
+
+    const setupPeerListeners = (peer, stream, mySlot) => {
+      setConnected(true);
+
+      // Handle incoming calls
+      peer.on('call', (call) => {
+        call.answer(stream);
+        call.on('stream', (remoteStream) => {
+          addRemoteStream(call.peer, remoteStream);
+        });
+      });
+
+      // Handle incoming data connections
+      peer.on('connection', (conn) => {
+        setupDataConnection(conn);
+      });
+
+      // Periodically try to connect to other slots
+      const interval = setInterval(() => {
+        for (let i = 1; i <= 5; i++) {
+          if (i === mySlot) continue;
+          const otherId = `${roomId}-slot-${i}`;
+          
+          // Connect for Data
+          if (!connectionsRef.current[otherId]) {
+            const conn = peer.connect(otherId);
+            conn.on('open', () => setupDataConnection(conn));
+          }
+
+          // Connect for Video
+          if (!callsRef.current[otherId] && stream) {
+            const call = peer.call(otherId, stream);
+            call.on('stream', (remoteStream) => {
+              addRemoteStream(otherId, remoteStream);
+              callsRef.current[otherId] = call;
+            });
+          }
+        }
+      }, 3000);
+
+      peer.on('close', () => clearInterval(interval));
+    };
+
+    initPeer();
 
     return () => {
-      peer.destroy();
+      peerRef.current?.destroy();
       localStream?.getTracks().forEach(t => t.stop());
     };
-  }, [roomId, userId]);
+  }, [roomId]);
 
   const addRemoteStream = (peerId, stream) => {
     setRemoteStreams(prev => {
@@ -69,26 +121,6 @@ export const useFamilySync = (roomId, userId) => {
     });
   };
 
-  const connectToPeer = useCallback((otherUserId) => {
-    const otherPeerId = `${roomId}-${otherUserId}`;
-    if (!peerRef.current || peers[otherPeerId]) return;
-
-    // Call for video
-    if (localStream) {
-      const call = peerRef.current.call(otherPeerId, localStream);
-      call.on('stream', (remoteStream) => {
-        addRemoteStream(otherPeerId, remoteStream);
-      });
-      setPeers(prev => ({ ...prev, [otherPeerId]: call }));
-    }
-
-    // Connect for data
-    const conn = peerRef.current.connect(otherPeerId);
-    conn.on('open', () => {
-      setupDataConnection(conn);
-    });
-  }, [roomId, localStream, peers]);
-
   const sendMessage = (text) => {
     const msg = { type: 'chat', sender: userId, text };
     Object.values(connectionsRef.current).forEach(conn => conn.send(msg));
@@ -107,7 +139,6 @@ export const useFamilySync = (roomId, userId) => {
     messages,
     reactions,
     connected,
-    connectToPeer,
     sendMessage,
     sendReaction
   };

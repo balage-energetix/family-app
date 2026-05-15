@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
-  Video, VideoOff, Mic, MicOff, Send, Smile, PhoneOff, 
+  Video, VideoOff, Mic, MicOff, Send, PhoneOff, 
   Users, MessageSquare, Heart, ThumbsUp, Laugh, Hand
 } from 'lucide-react';
 import { useFamilySync } from './hooks/useFamilySync';
@@ -34,15 +34,13 @@ function App() {
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoOff, setIsVideoOff] = useState(false);
 
-  const [targetName, setTargetName] = useState('');
-
   const { 
     localStream, remoteStreams, messages, reactions, 
-    connected, connectToPeer, sendMessage, sendReaction 
-  } = useFamilySync(roomId, userId);
+    connected, sendMessage, sendReaction 
+  } = useFamilySync(inCall ? roomId : null, userId);
 
   const handleJoin = () => {
-    if (userId.trim()) setInCall(true);
+    if (userId.trim() && roomId.trim()) setInCall(true);
   };
 
   const handleSendMessage = (e) => {
@@ -67,26 +65,6 @@ function App() {
     }
   };
 
-  const handleManualConnect = (e) => {
-    e.preventDefault();
-    if (targetName.trim()) {
-      connectToPeer(targetName);
-      setTargetName('');
-    }
-  };
-
-  // Common family names to auto-try
-  const commonNames = ['Anyuka', 'Hugo', 'En', 'Balazs', 'Hugi'].filter(name => name !== userId);
-
-  useEffect(() => {
-    if (inCall && connected) {
-      // Auto-connect to common names
-      commonNames.forEach(member => {
-        connectToPeer(member);
-      });
-    }
-  }, [inCall, connected, connectToPeer]);
-
   if (!inCall) {
     return (
       <div className="join-screen">
@@ -94,9 +72,9 @@ function App() {
           <div className="logo" style={{ justifyContent: 'center', marginBottom: '24px' }}>
             <Video size={32} /> FamilyConnect
           </div>
-          <h2 style={{ marginBottom: '16px' }}>Csatlakozz</h2>
-          <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '20px' }}>
-            Használd a neved (pl. Anyuka, Hugo, Balazs)
+          <h2 style={{ marginBottom: '8px' }}>Üdvözlünk!</h2>
+          <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '24px' }}>
+            Írj be egy nevet és a közös szobanevet.
           </p>
           <input 
             type="text" 
@@ -109,12 +87,12 @@ function App() {
           <input 
             type="text" 
             className="chat-input" 
-            placeholder="Szoba neve (pl. csaladi-kor)" 
+            placeholder="Szoba neve (legyen közös!)" 
             value={roomId}
             onChange={(e) => setRoomId(e.target.value)}
             style={{ width: '100%' }}
           />
-          <button className="join-btn" onClick={handleJoin}>Belépés</button>
+          <button className="join-btn" onClick={handleJoin}>Belépés a szobába</button>
         </div>
       </div>
     );
@@ -128,9 +106,9 @@ function App() {
         </div>
         <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
           <span style={{ fontSize: '0.8rem', color: connected ? '#4ade80' : '#f87171' }}>
-            ● {connected ? 'Kapcsolódva' : 'Kapcsolódás...'}
+            ● {connected ? 'Online' : 'Csatlakozás...'}
           </span>
-          <span style={{ color: 'var(--text-muted)' }}>{userId} @ {roomId}</span>
+          <span style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Szoba: {roomId}</span>
         </div>
       </header>
 
@@ -138,22 +116,13 @@ function App() {
         <div className="video-grid">
           {localStream && <VideoTile stream={localStream} label={`${userId} (Te)`} isLocal={true} />}
           {remoteStreams.map(rs => (
-            <VideoTile key={rs.id} stream={rs.stream} label={rs.id.split('-').pop()} />
+            <VideoTile key={rs.id} stream={rs.stream} label="Résztvevő" />
           ))}
           {remoteStreams.length === 0 && (
-            <div className="glass" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px', textAlign: 'center', color: 'var(--text-muted)', gap: '16px' }}>
-              <div>Várakozás a többiekre...</div>
-              <form onSubmit={handleManualConnect} style={{ display: 'flex', gap: '8px' }}>
-                <input 
-                  type="text" 
-                  className="chat-input" 
-                  placeholder="Másik neve (pl. Anyuka)" 
-                  value={targetName}
-                  onChange={(e) => setTargetName(e.target.value)}
-                  style={{ width: '150px' }}
-                />
-                <button type="submit" className="join-btn" style={{ marginTop: 0, padding: '8px 16px' }}>Hívás</button>
-              </form>
+            <div className="glass" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>
+              <div className="loader" style={{ marginBottom: '12px' }}>● ● ●</div>
+              Várakozás a többiekre... <br/>
+              <span style={{ fontSize: '0.8rem' }}>Mondd el nekik, hogy a(z) "{roomId}" szobába lépjenek!</span>
             </div>
           )}
         </div>
@@ -174,7 +143,7 @@ function App() {
             <input 
               type="text" 
               className="chat-input" 
-              placeholder="Írj valamit..." 
+              placeholder="Üzenet..." 
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
             />
@@ -203,13 +172,8 @@ function App() {
         </button>
       </div>
 
-      {/* Emoji Bursts */}
       {reactions.map(r => (
-        <div 
-          key={r.id} 
-          className="emoji-burst" 
-          style={{ left: `${Math.random() * 80 + 10}%`, bottom: '100px' }}
-        >
+        <div key={r.id} className="emoji-burst" style={{ left: `${Math.random() * 80 + 10}%`, bottom: '100px' }}>
           {r.emoji}
         </div>
       ))}
