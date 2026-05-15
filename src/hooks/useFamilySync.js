@@ -15,110 +15,14 @@ export const useFamilySync = (roomId, userId) => {
   const callsRef = useRef({});
   const intervalRef = useRef(null);
 
-  const startDiscovery = useCallback((peer, stream, mySlot) => {
-    if (intervalRef.current) clearInterval(intervalRef.current);
-    
-    intervalRef.current = setInterval(() => {
-      if (!peer || peer.destroyed) return;
-      
-      for (let i = 1; i <= 12; i++) {
-        if (i === mySlot) continue;
-        const otherId = `${roomId}-v3-slot-${i}`;
-        
-        // Data connection attempt
-        if (!connectionsRef.current[otherId] || !connectionsRef.current[otherId].open) {
-          const conn = peer.connect(otherId, { reliable: true });
-          conn.on('open', () => setupDataConnection(conn));
-        }
-
-        // Call attempt
-        if (!callsRef.current[otherId] && stream) {
-          const call = peer.call(otherId, stream);
-          call.on('stream', (remoteStream) => {
-            addRemoteStream(otherId, remoteStream);
-            callsRef.current[otherId] = call;
-          });
-          call.on('error', () => delete callsRef.current[otherId]);
-        }
-      }
-    }, 3000);
-  }, [roomId]);
-
-  const initPeer = useCallback(async () => {
-    if (!roomId) return;
-    
-    // Cleanup previous
-    peerRef.current?.destroy();
-    setRemoteStreams([]);
-    setConnected(false);
-
-    let stream = localStream;
-    if (!stream) {
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({ 
-          video: { width: 1280, height: 720 }, 
-          audio: { echoCancellation: true, noiseSuppression: true } 
-        });
-        setLocalStream(stream);
-      } catch (err) {
-        console.error('Media error', err);
-      }
-    }
-
-    // Try slots 1-12
-    for (let i = 1; i <= 12; i++) {
-      const potentialId = `${roomId}-v3-slot-${i}`;
-      const peer = new Peer(potentialId);
-      
-      const success = await new Promise((resolve) => {
-        peer.on('open', () => resolve(true));
-        peer.on('error', (err) => {
-          if (err.type === 'unavailable-id') resolve(false);
-          else resolve(true);
-        });
-        setTimeout(() => resolve(false), 5000);
-      });
-
-      if (success) {
-        peerRef.current = peer;
-        setActiveSlot(i);
-        setConnected(true);
-        
-        peer.on('call', (call) => {
-          call.answer(stream);
-          call.on('stream', (remoteStream) => {
-            addRemoteStream(call.peer, remoteStream);
-            callsRef.current[call.peer] = call;
-          });
-        });
-
-        peer.on('connection', (conn) => setupDataConnection(conn));
-        peer.on('disconnected', () => peer.reconnect());
-        
-        startDiscovery(peer, stream, i);
-        break;
-      } else {
-        peer.destroy();
-      }
-    }
-  }, [roomId, localStream, startDiscovery]);
-
-  useEffect(() => {
-    initPeer();
-    return () => {
-      peerRef.current?.destroy();
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
-  }, [roomId, initPeer]);
-
-  const addRemoteStream = (peerId, stream) => {
+  const addRemoteStream = useCallback((peerId, stream) => {
     setRemoteStreams(prev => {
       if (prev.find(s => s.id === peerId)) return prev;
       return [...prev, { id: peerId, stream }];
     });
-  };
+  }, []);
 
-  const setupDataConnection = (conn) => {
+  const setupDataConnection = useCallback((conn) => {
     if (connectionsRef.current[conn.peer]?.open) return;
     connectionsRef.current[conn.peer] = conn;
     
@@ -136,8 +40,110 @@ export const useFamilySync = (roomId, userId) => {
       }
     });
 
-    conn.on('close', () => delete connectionsRef.current[conn.peer]);
-  };
+    conn.on('close', () => {
+      delete connectionsRef.current[conn.peer];
+      setRemoteStreams(prev => prev.filter(s => s.id !== conn.peer));
+    });
+  }, [userId]);
+
+  const startDiscovery = useCallback((peer, stream, mySlot) => {
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    
+    intervalRef.current = setInterval(() => {
+      if (!peer || peer.destroyed) return;
+      
+      for (let i = 1; i <= 6; i++) { // Back to 6 slots to reduce noise
+        if (i === mySlot) continue;
+        const otherId = `${roomId}-v3-slot-${i}`;
+        
+        // Data connection check
+        if (!connectionsRef.current[otherId]) {
+          const conn = peer.connect(otherId, { reliable: true });
+          conn.on('open', () => setupDataConnection(conn));
+        }
+
+        // Call check - store call ref IMMEDIATELY to prevent double calling
+        if (!callsRef.current[otherId] && stream) {
+          const call = peer.call(otherId, stream);
+          callsRef.current[otherId] = call; // Mark as calling
+          
+          call.on('stream', (remoteStream) => {
+            addRemoteStream(otherId, remoteStream);
+          });
+          
+          call.on('close', () => {
+            delete callsRef.current[otherId];
+            setRemoteStreams(prev => prev.filter(s => s.id !== otherId));
+          });
+
+          call.on('error', () => {
+            delete callsRef.current[otherId];
+          });
+        }
+      }
+    }, 4000); // Slower interval
+  }, [roomId, setupDataConnection, addRemoteStream]);
+
+  const initPeer = useCallback(async () => {
+    if (!roomId) return;
+    
+    peerRef.current?.destroy();
+    setRemoteStreams([]);
+    setConnected(false);
+
+    let stream = localStream;
+    if (!stream) {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ 
+          video: { width: 1280, height: 720 }, 
+          audio: { echoCancellation: true, noiseSuppression: true } 
+        });
+        setLocalStream(stream);
+      } catch (err) {
+        console.error('Media error', err);
+      }
+    }
+
+    for (let i = 1; i <= 6; i++) {
+      const potentialId = `${roomId}-v3-slot-${i}`;
+      const peer = new Peer(potentialId);
+      
+      const success = await new Promise((resolve) => {
+        peer.on('open', () => resolve(true));
+        peer.on('error', (err) => resolve(false));
+        setTimeout(() => resolve(false), 3000);
+      });
+
+      if (success) {
+        peerRef.current = peer;
+        setActiveSlot(i);
+        setConnected(true);
+        
+        peer.on('call', (call) => {
+          if (callsRef.current[call.peer]) return;
+          callsRef.current[call.peer] = call;
+          call.answer(stream);
+          call.on('stream', (remoteStream) => {
+            addRemoteStream(call.peer, remoteStream);
+          });
+        });
+
+        peer.on('connection', (conn) => setupDataConnection(conn));
+        startDiscovery(peer, stream, i);
+        break;
+      } else {
+        peer.destroy();
+      }
+    }
+  }, [roomId, localStream, startDiscovery, setupDataConnection, addRemoteStream]);
+
+  useEffect(() => {
+    initPeer();
+    return () => {
+      peerRef.current?.destroy();
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, [roomId, initPeer]);
 
   const sendMessage = (text) => {
     const msg = { type: 'chat', sender: userId, text };
