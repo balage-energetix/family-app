@@ -41,7 +41,7 @@ export default function App() {
   const [showChat, setShowChat]   = useState(false);
   const chatRef = useRef();
 
-  const { remoteStreams, messages, reactions, peerStatus, mySlot, peerNames, sendMessage, sendReaction }
+  const { remoteStreams, messages, reactions, peerStatus, peerNames, sendMessage, sendReaction }
     = useFamilySync(session?.room ?? null, session?.name ?? null, localStream);
 
   // Auto-scroll chat
@@ -174,7 +174,7 @@ export default function App() {
         <div className="logo"><Video size={22} /><span>FamilyConnect</span></div>
         <div className="header-right">
           <div className={`status-chip ${peerStatus === 'online' ? 'online' : 'connecting'}`}>
-            {peerStatus === 'online' ? <><span className="dot" />Online {mySlot && `(${mySlot}. slot)`}</> : <><Loader size={12} className="spin" />Csatlakozás...</>}
+            {peerStatus === 'online' ? <><span className="dot" />Online</> : <><Loader size={12} className="spin" />Csatlakozás...</>}
           </div>
           <span className="room-label">{session.room}</span>
           <button className={`icon-btn ${showChat ? 'active' : ''}`} onClick={() => setShowChat(v => !v)} title="Csevegés">
