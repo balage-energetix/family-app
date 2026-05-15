@@ -135,9 +135,12 @@ export default function App() {
             <VideoTile key={rs.id} stream={rs.stream} label={peerNames[rs.id] || 'Csatlakozó...'} />
           ))}
           {remoteStreams.length === 0 && peerStatus === 'online' && (
-            <div className="waiting-tile glass">
-              <Loader size={30} className="spin" />
-              <p>Várakozás a többiekre...</p>
+            <div className="waiting-overlay">
+              <div className="waiting-content glass">
+                <Loader size={24} className="spin" />
+                <span>Várakozás a többiekre...</span>
+                <p>Oszd meg a szoba nevét: <strong>{session.room}</strong></p>
+              </div>
             </div>
           )}
         </div>

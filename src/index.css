@@ -211,21 +211,45 @@ html, body, #root {
 
 .muted-badge { margin-left: 4px; }
 
-/* ── Waiting tile ───────────────────────────────────── */
-.waiting-tile {
+/* ── Waiting overlay ────────────────────────────────── */
+.waiting-overlay {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.waiting-content {
+  padding: 24px 32px;
+  border-radius: var(--radius);
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
   gap: 12px;
-  border-radius: var(--radius);
-  aspect-ratio: 16/9;
-  color: var(--muted);
+  color: var(--text);
   text-align: center;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.6);
+  max-width: 90%;
 }
-.waiting-tile p { font-size: 1rem; font-weight: 500; }
-.waiting-tile small { font-size: 0.8rem; }
-.waiting-tile strong { color: var(--text); }
+
+.waiting-content span {
+  font-size: 1.1rem;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.waiting-content p {
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+.waiting-content strong {
+  color: var(--accent);
+}
 
 /* ── Chat panel ─────────────────────────────────────── */
 .chat-panel {
