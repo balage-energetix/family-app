@@ -136,14 +136,24 @@ body {
 
 .controls-bar {
   position: fixed;
-  bottom: 30px;
+  bottom: 20px;
   left: 50%;
   transform: translateX(-50%);
   display: flex;
   gap: 12px;
-  padding: 12px 24px;
+  padding: 10px 20px;
   z-index: 100;
   border-radius: 40px;
+  max-width: 98vw;
+  width: max-content;
+}
+
+@media (max-width: 600px) {
+  .controls-bar {
+    gap: 6px;
+    padding: 8px 12px;
+    bottom: env(safe-area-inset-bottom, 15px);
+  }
 }
 
 .control-btn {
@@ -158,6 +168,14 @@ body {
   justify-content: center;
   cursor: pointer;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  flex-shrink: 1;
+}
+
+@media (max-width: 600px) {
+  .control-btn {
+    width: 38px;
+    height: 38px;
+  }
 }
 
 .control-btn:hover {
