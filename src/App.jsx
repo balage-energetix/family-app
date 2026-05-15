@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Video, VideoOff, Mic, MicOff, Send, PhoneOff, 
-  Users, MessageSquare, Heart, ThumbsUp, Laugh, Hand
+  Users, MessageSquare, Heart, ThumbsUp, Laugh, Hand, X
 } from 'lucide-react';
 import { useFamilySync } from './hooks/useFamilySync';
 import './index.css';
@@ -19,7 +19,7 @@ const VideoTile = ({ stream, label, isLocal }) => {
     <div className="video-tile glass">
       <video ref={videoRef} autoPlay playsInline muted={isLocal} />
       <div className="video-info">
-        {isLocal ? <Video size={16} /> : <Users size={16} />}
+        {isLocal ? <Video size={14} /> : <Users size={14} />}
         <span>{label}</span>
       </div>
     </div>
@@ -33,6 +33,7 @@ function App() {
   const [inputText, setInputText] = useState('');
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoOff, setIsVideoOff] = useState(false);
+  const [showChat, setShowChat] = useState(false);
 
   const { 
     localStream, remoteStreams, messages, reactions, 
@@ -74,7 +75,7 @@ function App() {
           </div>
           <h2 style={{ marginBottom: '8px' }}>Üdvözlünk!</h2>
           <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '24px' }}>
-            Írj be egy nevet és a közös szobanevet.
+            Lépj be a közös szobába.
           </p>
           <input 
             type="text" 
@@ -87,12 +88,12 @@ function App() {
           <input 
             type="text" 
             className="chat-input" 
-            placeholder="Szoba neve (legyen közös!)" 
+            placeholder="Szoba neve" 
             value={roomId}
             onChange={(e) => setRoomId(e.target.value)}
             style={{ width: '100%' }}
           />
-          <button className="join-btn" onClick={handleJoin}>Belépés a szobába</button>
+          <button className="join-btn" onClick={handleJoin}>Belépés</button>
         </div>
       </div>
     );
@@ -102,13 +103,19 @@ function App() {
     <div className="app-container">
       <header className="header glass">
         <div className="logo">
-          <Video size={24} /> FamilyConnect
+          <Video size={20} /> FamilyConnect
         </div>
         <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-          <span style={{ fontSize: '0.8rem', color: connected ? '#4ade80' : '#f87171' }}>
-            ● {connected ? 'Online' : 'Csatlakozás...'}
+          <button 
+            className={`control-btn ${showChat ? 'active' : ''}`} 
+            style={{ width: '36px', height: '36px' }}
+            onClick={() => setShowChat(!showChat)}
+          >
+            <MessageSquare size={18} />
+          </button>
+          <span style={{ fontSize: '0.7rem', color: connected ? '#4ade80' : '#f87171' }}>
+            ● {connected ? 'Online' : '...'}
           </span>
-          <span style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Szoba: {roomId}</span>
         </div>
       </header>
 
@@ -119,17 +126,21 @@ function App() {
             <VideoTile key={rs.id} stream={rs.stream} label="Résztvevő" />
           ))}
           {remoteStreams.length === 0 && (
-            <div className="glass" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>
-              <div className="loader" style={{ marginBottom: '12px' }}>● ● ●</div>
+            <div className="glass" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '30px', textAlign: 'center', color: 'var(--text-muted)' }}>
               Várakozás a többiekre... <br/>
-              <span style={{ fontSize: '0.8rem' }}>Mondd el nekik, hogy a(z) "{roomId}" szobába lépjenek!</span>
+              <span style={{ fontSize: '0.7rem' }}>Szoba: {roomId}</span>
             </div>
           )}
         </div>
 
-        <aside className="chat-panel glass">
-          <div className="header" style={{ height: '48px', borderBottom: '1px solid var(--glass-border)' }}>
-            <MessageSquare size={18} /> Csevegés
+        <aside className={`chat-panel glass ${showChat ? 'active' : ''}`}>
+          <div className="header" style={{ height: '48px', borderBottom: '1px solid var(--glass-border)', padding: '0 12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <MessageSquare size={16} /> Csevegés
+            </div>
+            <button className="control-btn" style={{ width: '32px', height: '32px' }} onClick={() => setShowChat(false)}>
+              <X size={16} />
+            </button>
           </div>
           <div className="chat-messages">
             {messages.map((msg, i) => (
@@ -147,8 +158,8 @@ function App() {
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
             />
-            <button type="submit" className="control-btn active" style={{ width: '36px', height: '36px' }}>
-              <Send size={16} />
+            <button type="submit" className="control-btn active" style={{ width: '34px', height: '34px' }}>
+              <Send size={14} />
             </button>
           </form>
         </aside>
@@ -156,19 +167,19 @@ function App() {
 
       <div className="controls-bar glass">
         <button className={`control-btn ${isMuted ? 'danger' : 'active'}`} onClick={toggleMute}>
-          {isMuted ? <MicOff size={20} /> : <Mic size={20} />}
+          {isMuted ? <MicOff size={18} /> : <Mic size={18} />}
         </button>
         <button className={`control-btn ${isVideoOff ? 'danger' : 'active'}`} onClick={toggleVideo}>
-          {isVideoOff ? <VideoOff size={20} /> : <Video size={20} />}
+          {isVideoOff ? <VideoOff size={18} /> : <Video size={18} />}
         </button>
-        <div style={{ width: '1px', background: 'var(--glass-border)', margin: '0 8px' }} />
-        <button className="control-btn" onClick={() => sendReaction('❤️')}><Heart size={20} color="#fb7185" /></button>
-        <button className="control-btn" onClick={() => sendReaction('👍')}><ThumbsUp size={20} color="#60a5fa" /></button>
-        <button className="control-btn" onClick={() => sendReaction('😂')}><Laugh size={20} color="#fbbf24" /></button>
-        <button className="control-btn" onClick={() => sendReaction('👋')}><Hand size={20} color="#c084fc" /></button>
-        <div style={{ width: '1px', background: 'var(--glass-border)', margin: '0 8px' }} />
+        <div style={{ width: '1px', background: 'var(--glass-border)', margin: '0 4px' }} />
+        <button className="control-btn" onClick={() => sendReaction('❤️')}><Heart size={18} color="#fb7185" /></button>
+        <button className="control-btn" onClick={() => sendReaction('👍')}><ThumbsUp size={18} color="#60a5fa" /></button>
+        <button className="control-btn" onClick={() => sendReaction('😂')}><Laugh size={18} color="#fbbf24" /></button>
+        <button className="control-btn" onClick={() => sendReaction('👋')}><Hand size={18} color="#c084fc" /></button>
+        <div style={{ width: '1px', background: 'var(--glass-border)', margin: '0 4px' }} />
         <button className="control-btn danger" onClick={() => window.location.reload()}>
-          <PhoneOff size={20} />
+          <PhoneOff size={18} />
         </button>
       </div>
 
