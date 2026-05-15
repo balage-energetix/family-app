@@ -50,11 +50,13 @@ export const useFamilySync = (roomId, userId, localStream) => {
 
     // Simple room prefix (alphanumeric only)
     const prefix = roomId.replace(/[^a-z0-9]/gi, '').toLowerCase().slice(0, 12);
+    // Time window (changes every 10 minutes) — prevents stale IDs from blocking
+    const tw = Math.floor(Date.now() / 600000);
 
     const trySlot = (slot) => {
-      if (slot > 4) { setPeerStatus('full'); return; }
+      if (slot > 20) { setPeerStatus('full'); return; }
 
-      const slotId = `fc${prefix}${slot}`;
+      const slotId = `fc${prefix}${tw}s${slot}`;
       const p = new Peer(slotId, {
         config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] }
       });
@@ -84,7 +86,7 @@ export const useFamilySync = (roomId, userId, localStream) => {
 
         // Call all lower-numbered slots (they'll answer)
         for (let i = 1; i < slot; i++) {
-          callPeer(p, `fc${prefix}${i}`);
+          callPeer(p, `fc${prefix}${tw}s${i}`);
         }
       });
 
