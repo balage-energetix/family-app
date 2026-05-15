@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Video, VideoOff, Mic, MicOff, Send, PhoneOff, 
-  Users, MessageSquare, Heart, ThumbsUp, Laugh, Hand, X, User
+  Users, MessageSquare, Heart, ThumbsUp, Laugh, Hand, X
 } from 'lucide-react';
 import { useFamilySync } from './hooks/useFamilySync';
 import './index.css';
@@ -30,7 +30,6 @@ function App() {
   const [inCall, setInCall] = useState(false);
   const [roomId, setRoomId] = useState('csaladi-kor');
   const [userId, setUserId] = useState('');
-  const [roleIndex, setRoleIndex] = useState(null);
   const [inputText, setInputText] = useState('');
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoOff, setIsVideoOff] = useState(false);
@@ -39,14 +38,11 @@ function App() {
   const { 
     localStream, remoteStreams, messages, reactions, 
     connected, peerNames, sendMessage, sendReaction 
-  } = useFamilySync(inCall ? roomId : null, userId, roleIndex);
+  } = useFamilySync(inCall ? roomId : null, userId);
 
-  const handleJoin = (role) => {
-    if (userId.trim()) {
-      setRoleIndex(role);
+  const handleJoin = () => {
+    if (userId.trim() && roomId.trim()) {
       setInCall(true);
-    } else {
-      alert('Kérlek írd be a neved!');
     }
   };
 
@@ -81,7 +77,7 @@ function App() {
           </div>
           <h2>Üdvözlünk!</h2>
           <p style={{ fontSize: '1.1rem', color: 'var(--text-muted)', marginBottom: '32px' }}>
-            Válassz egy szerepkört a szobában.
+            Lépj be a közös szobába.
           </p>
           <input 
             type="text" 
@@ -89,15 +85,17 @@ function App() {
             placeholder="A te neved" 
             value={userId}
             onChange={(e) => setUserId(e.target.value)}
+            onKeyPress={(e) => e.key === 'Enter' && handleJoin()}
           />
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', marginTop: '10px' }}>
-            <button className="join-btn" style={{ fontSize: '0.9rem', padding: '12px' }} onClick={() => handleJoin(1)}>1. Tag</button>
-            <button className="join-btn" style={{ fontSize: '0.9rem', padding: '12px' }} onClick={() => handleJoin(2)}>2. Tag</button>
-            <button className="join-btn" style={{ fontSize: '0.9rem', padding: '12px' }} onClick={() => handleJoin(3)}>3. Tag</button>
-          </div>
-          <div style={{ marginTop: '20px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-            Mindenki más számot válasszon! (pl. Anyu: 1, Tesó: 2, Te: 3)
-          </div>
+          <input 
+            type="text" 
+            className="chat-input" 
+            placeholder="Szoba neve (pl. csaladi-kor)" 
+            value={roomId}
+            onChange={(e) => setRoomId(e.target.value)}
+            onKeyPress={(e) => e.key === 'Enter' && handleJoin()}
+          />
+          <button className="join-btn" onClick={handleJoin}>Belépés</button>
         </div>
       </div>
     );
@@ -122,7 +120,7 @@ function App() {
               ● {connected ? 'Online' : 'Csatlakozás...'}
             </div>
             <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>
-              Szerepkör: {roleIndex}. tag
+              Szoba: {roomId}
             </div>
           </div>
         </div>
@@ -137,8 +135,7 @@ function App() {
           {remoteStreams.length === 0 && (
             <div className="glass" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>
               <div style={{ marginBottom: '16px', fontSize: '1.2rem' }}>Várakozás a többiekre...</div>
-              <div style={{ fontSize: '0.9rem' }}>Te vagy a(z) {roleIndex}. tag.</div>
-              <div style={{ fontSize: '0.8rem', marginTop: '8px' }}>Szólj a többieknek, hogy a másik két számot válasszák!</div>
+              <div style={{ fontSize: '0.9rem' }}>A(z) "{roomId}" szobában vagy.</div>
             </div>
           )}
         </div>
