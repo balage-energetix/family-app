@@ -24,30 +24,25 @@ const VideoTile = ({ stream, label, isLocal, muted }) => {
 
 // ─── Main App ─────────────────────────────────────────
 export default function App() {
-  // Step 1: form
-  const [name, setName]   = useState('');
-  const [room, setRoom]   = useState('csaladi-kor');
-  const [session, setSession] = useState(null); // { name, room }
+  const [name, setName] = useState('');
+  const [room, setRoom] = useState('csaladi-kor');
+  const [session, setSession] = useState(null);
 
-  // Step 2: camera
-  const [localStream, setLocalStream]   = useState(null);
-  const [cameraError, setCameraError]   = useState(null);
+  const [localStream, setLocalStream] = useState(null);
+  const [cameraError, setCameraError] = useState(null);
   const [cameraLoading, setCameraLoading] = useState(false);
 
-  // Step 3: call UI
   const [inputText, setInputText] = useState('');
-  const [isMuted, setIsMuted]     = useState(false);
-  const [isVidOff, setIsVidOff]   = useState(false);
-  const [showChat, setShowChat]   = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
+  const [isVidOff, setIsVidOff] = useState(false);
+  const [showChat, setShowChat] = useState(false);
   const chatRef = useRef();
 
   const { remoteStreams, messages, reactions, peerStatus, peerNames, sendMessage, sendReaction }
     = useFamilySync(session?.room ?? null, session?.name ?? null, localStream);
 
-  // Auto-scroll chat
   useEffect(() => { chatRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
-  // Request camera when session starts
   useEffect(() => {
     if (!session || localStream) return;
     setCameraLoading(true);
@@ -59,15 +54,10 @@ export default function App() {
       .then(stream => { setLocalStream(stream); setCameraLoading(false); })
       .catch(err => {
         setCameraLoading(false);
-        setCameraError(
-          err.name === 'NotAllowedError'
-            ? 'Kamera/mikrofon hozzáférés megtagadva. Kattints a böngésző címsorában a kamera ikonra és engedélyezd, majd nyomj az "Újra" gombra!'
-            : `Hiba: ${err.message || err.name}`
-        );
+        setCameraError('Kamera hozzáférés kell a híváshoz. Engedélyezd a böngészőben!');
       });
   }, [session]);
 
-  // Cleanup on unmount
   useEffect(() => () => localStream?.getTracks().forEach(t => t.stop()), [localStream]);
 
   const toggleMute = () => {
@@ -83,91 +73,47 @@ export default function App() {
     if (inputText.trim()) { sendMessage(inputText.trim()); setInputText(''); }
   };
 
-  // ── SCREEN 1: Join form ──────────────────────────────
   if (!session) {
     return (
       <div className="join-screen">
         <form className="join-card glass" onSubmit={e => { e.preventDefault(); if (name.trim() && room.trim()) setSession({ name: name.trim(), room: room.trim() }); }}>
           <div className="join-logo"><Video size={38} /><span>FamilyConnect</span></div>
           <h1>Üdvözlünk!</h1>
-          <p className="join-subtitle">Lépj be a közös szobába és találkozz a családoddal.</p>
-          <label className="input-label">A te neved</label>
-          <input className="join-input" placeholder="pl. Balázs" value={name} onChange={e => setName(e.target.value)} autoFocus required />
-          <label className="input-label">Szoba neve</label>
-          <input className="join-input" placeholder="pl. csaladi-kor" value={room} onChange={e => setRoom(e.target.value)} required />
-          <button type="submit" className="join-btn">Csatlakozás →</button>
-          <p className="join-hint">Mindenki, aki ugyanezt a szobanevet írja be, automatikusan megjelenik nálad.</p>
+          <p className="join-subtitle">Lépj be a közös szobába.</p>
+          <input className="join-input" placeholder="A te neved" value={name} onChange={e => setName(e.target.value)} autoFocus required />
+          <input className="join-input" placeholder="Szoba neve" value={room} onChange={e => setRoom(e.target.value)} required />
+          <button type="submit" className="join-btn">Belépés</button>
         </form>
       </div>
     );
   }
 
-  // ── SCREEN 2: Camera permission ──────────────────────
   if (!localStream) {
     return (
       <div className="join-screen">
-        <div className="join-card glass" style={{ textAlign: 'center', gap: 0 }}>
-          {cameraLoading && !cameraError && (
-            <>
-              <Camera size={52} color="#8b5cf6" style={{ margin: '0 auto 20px' }} />
-              <h2>Kamera engedélyezése</h2>
-              <p style={{ color: 'var(--muted)', marginTop: 12, lineHeight: 1.6 }}>
-                A böngésző kéri a kamera és mikrofon hozzáférést.<br />
-                <strong>Kattints az "Engedélyezés" gombra!</strong><br />
-                (Ha nem jelenik meg, nézd a böngésző címsorát.)
-              </p>
-              <Loader size={28} className="spin" style={{ margin: '24px auto 0' }} />
-            </>
-          )}
-          {cameraError && (
-            <>
-              <AlertCircle size={52} color="#ef4444" style={{ margin: '0 auto 20px' }} />
-              <h2>Hiba</h2>
-              <p style={{ color: 'var(--muted)', marginTop: 12, lineHeight: 1.6, fontSize: '0.9rem' }}>{cameraError}</p>
-              <button className="join-btn" style={{ marginTop: 24 }} onClick={() => { setCameraError(null); setCameraLoading(true); setSession({ ...session }); }}>
-                Újra próbálom
-              </button>
-              <button className="join-btn" style={{ marginTop: 12, background: 'rgba(255,255,255,0.08)', boxShadow: 'none' }} onClick={() => setSession(null)}>
-                Vissza
-              </button>
-            </>
-          )}
+        <div className="join-card glass" style={{ textAlign: 'center' }}>
+          {cameraLoading ? <Loader size={40} className="spin" /> : <AlertCircle size={40} color="#ef4444" />}
+          <h2 style={{ marginTop: 20 }}>{cameraError ? 'Hiba' : 'Kamera indítása...'}</h2>
+          <p style={{ marginTop: 10, color: 'var(--muted)' }}>{cameraError || 'Kérlek engedélyezd a kamerát a böngészőben.'}</p>
+          {cameraError && <button className="join-btn" onClick={() => window.location.reload()}>Újra</button>}
         </div>
       </div>
     );
   }
 
-  // ── SCREEN 3: Room full ──────────────────────────────
   if (peerStatus === 'full') {
     return (
       <div className="join-screen">
         <div className="join-card glass" style={{ textAlign: 'center' }}>
-          <Users size={52} color="#ef4444" style={{ margin: '0 auto 20px' }} />
-          <h2>A szoba megtelt</h2>
-          <p style={{ color: 'var(--muted)', marginTop: 12 }}>Ebben a szobában már 4 fő van.</p>
+          <AlertCircle size={40} color="#ef4444" />
+          <h2 style={{ marginTop: 20 }}>A szoba megtelt</h2>
+          <p style={{ marginTop: 10, color: 'var(--muted)' }}>Próbálkozz később vagy egy másik szobában.</p>
           <button className="join-btn" onClick={() => window.location.reload()}>Vissza</button>
         </div>
       </div>
     );
   }
 
-  // ── SCREEN 3b: PeerJS error ──────────────────────────
-  if (peerStatus === 'error' || peerStatus === 'full') {
-    return (
-      <div className="join-screen">
-        <div className="join-card glass" style={{ textAlign: 'center' }}>
-          <AlertCircle size={52} color="#ef4444" style={{ margin: '0 auto 20px' }} />
-          <h2>{peerStatus === 'full' ? 'A szoba megtelt' : 'Kapcsolódási hiba'}</h2>
-          <p style={{ color: 'var(--muted)', marginTop: 12, lineHeight: 1.6, fontSize: '0.9rem' }}>
-            {peerStatus === 'full' ? 'Ebben a szobában már 4 fő van.' : 'Nem sikerült csatlakozni. Kérlek frissítsd az oldalt!'}
-          </p>
-          <button className="join-btn" style={{ marginTop: 24 }} onClick={() => window.location.reload()}>Újra próbálom</button>
-        </div>
-      </div>
-    );
-  }
-
-  // ── SCREEN 4: Call ───────────────────────────────────
   return (
     <div className="app-container">
       <header className="app-header glass">
@@ -176,10 +122,8 @@ export default function App() {
           <div className={`status-chip ${peerStatus === 'online' ? 'online' : 'connecting'}`}>
             {peerStatus === 'online' ? <><span className="dot" />Online</> : <><Loader size={12} className="spin" />Csatlakozás...</>}
           </div>
-          <span className="room-label">{session.room}</span>
-          <button className={`icon-btn ${showChat ? 'active' : ''}`} onClick={() => setShowChat(v => !v)} title="Csevegés">
+          <button className={`icon-btn ${showChat ? 'active' : ''}`} onClick={() => setShowChat(v => !v)}>
             <MessageSquare size={18} />
-            {messages.length > 0 && !showChat && <span className="msg-badge">{messages.length}</span>}
           </button>
         </div>
       </header>
@@ -194,7 +138,6 @@ export default function App() {
             <div className="waiting-tile glass">
               <Loader size={30} className="spin" />
               <p>Várakozás a többiekre...</p>
-              <small>Szoba: <strong>{session.room}</strong></small>
             </div>
           )}
         </div>
@@ -202,13 +145,12 @@ export default function App() {
         {showChat && (
           <aside className="chat-panel glass">
             <div className="chat-header">
-              <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}><MessageSquare size={16} /> Csevegés</span>
+              <span>Csevegés</span>
               <button className="icon-btn" onClick={() => setShowChat(false)}><X size={18} /></button>
             </div>
             <div className="chat-messages">
-              {messages.length === 0 && <div className="chat-empty">Még nincs üzenet.</div>}
               {messages.map(m => (
-                <div key={m.id} className={`message ${m.sender === session.name ? 'sent' : 'received'}`}>
+                <div key={m._id} className={`message ${m.sender === session.name ? 'sent' : 'received'}`}>
                   <div className="message-sender">{m.sender}</div>
                   <div className="message-text">{m.text}</div>
                 </div>
@@ -224,10 +166,10 @@ export default function App() {
       </div>
 
       <div className="controls-bar glass">
-        <button className={`ctrl-btn ${isMuted ? 'danger' : 'active'}`} onClick={toggleMute} title={isMuted ? 'Mikrofon be' : 'Mikrofon ki'}>
+        <button className={`ctrl-btn ${isMuted ? 'danger' : 'active'}`} onClick={toggleMute}>
           {isMuted ? <MicOff size={20} /> : <Mic size={20} />}
         </button>
-        <button className={`ctrl-btn ${isVidOff ? 'danger' : 'active'}`} onClick={toggleVid} title={isVidOff ? 'Kamera be' : 'Kamera ki'}>
+        <button className={`ctrl-btn ${isVidOff ? 'danger' : 'active'}`} onClick={toggleVid}>
           {isVidOff ? <VideoOff size={20} /> : <Video size={20} />}
         </button>
         <div className="ctrl-divider" />
@@ -236,11 +178,11 @@ export default function App() {
         <button className="ctrl-btn emoji" onClick={() => sendReaction('😂')}><Laugh size={20} color="#fbbf24" /></button>
         <button className="ctrl-btn emoji" onClick={() => sendReaction('👋')}><Hand size={20} color="#c084fc" /></button>
         <div className="ctrl-divider" />
-        <button className="ctrl-btn danger" onClick={() => window.location.reload()} title="Kilépés"><PhoneOff size={20} /></button>
+        <button className="ctrl-btn danger" onClick={() => window.location.reload()}><PhoneOff size={20} /></button>
       </div>
 
       {reactions.map(r => (
-        <div key={r.id} className="emoji-burst" style={{ left: `${10 + Math.random() * 80}%`, bottom: 90 }}>
+        <div key={r._id} className="emoji-burst" style={{ left: `${10 + Math.random() * 80}%`, bottom: 90 }}>
           {r.emoji}
         </div>
       ))}
