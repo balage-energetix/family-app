@@ -34,6 +34,8 @@ function App() {
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoOff, setIsVideoOff] = useState(false);
 
+  const [targetName, setTargetName] = useState('');
+
   const { 
     localStream, remoteStreams, messages, reactions, 
     connected, connectToPeer, sendMessage, sendReaction 
@@ -65,13 +67,21 @@ function App() {
     }
   };
 
-  // Try to connect to other known family members periodically or on join
-  // For this demo, we'll assume they use these IDs
-  const familyMembers = ['Anyuka', 'Hugo', 'En'].filter(name => name !== userId);
+  const handleManualConnect = (e) => {
+    e.preventDefault();
+    if (targetName.trim()) {
+      connectToPeer(targetName);
+      setTargetName('');
+    }
+  };
+
+  // Common family names to auto-try
+  const commonNames = ['Anyuka', 'Hugo', 'En', 'Balazs', 'Hugi'].filter(name => name !== userId);
 
   useEffect(() => {
     if (inCall && connected) {
-      familyMembers.forEach(member => {
+      // Auto-connect to common names
+      commonNames.forEach(member => {
         connectToPeer(member);
       });
     }
@@ -84,11 +94,14 @@ function App() {
           <div className="logo" style={{ justifyContent: 'center', marginBottom: '24px' }}>
             <Video size={32} /> FamilyConnect
           </div>
-          <h2 style={{ marginBottom: '16px' }}>Csatlakozz a beszélgetéshez</h2>
+          <h2 style={{ marginBottom: '16px' }}>Csatlakozz</h2>
+          <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '20px' }}>
+            Használd a neved (pl. Anyuka, Hugo, Balazs)
+          </p>
           <input 
             type="text" 
             className="chat-input" 
-            placeholder="A te neved (pl. Anyuka, Hugo, En)" 
+            placeholder="A te neved" 
             value={userId}
             onChange={(e) => setUserId(e.target.value)}
             style={{ width: '100%', marginBottom: '12px' }}
@@ -96,7 +109,7 @@ function App() {
           <input 
             type="text" 
             className="chat-input" 
-            placeholder="Szoba neve" 
+            placeholder="Szoba neve (pl. csaladi-kor)" 
             value={roomId}
             onChange={(e) => setRoomId(e.target.value)}
             style={{ width: '100%' }}
@@ -117,7 +130,7 @@ function App() {
           <span style={{ fontSize: '0.8rem', color: connected ? '#4ade80' : '#f87171' }}>
             ● {connected ? 'Kapcsolódva' : 'Kapcsolódás...'}
           </span>
-          <span style={{ color: 'var(--text-muted)' }}>Szoba: {roomId}</span>
+          <span style={{ color: 'var(--text-muted)' }}>{userId} @ {roomId}</span>
         </div>
       </header>
 
@@ -128,8 +141,19 @@ function App() {
             <VideoTile key={rs.id} stream={rs.stream} label={rs.id.split('-').pop()} />
           ))}
           {remoteStreams.length === 0 && (
-            <div className="glass" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>
-              Várakozás a többiekre... <br/> (Anyuka és Hugo)
+            <div className="glass" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px', textAlign: 'center', color: 'var(--text-muted)', gap: '16px' }}>
+              <div>Várakozás a többiekre...</div>
+              <form onSubmit={handleManualConnect} style={{ display: 'flex', gap: '8px' }}>
+                <input 
+                  type="text" 
+                  className="chat-input" 
+                  placeholder="Másik neve (pl. Anyuka)" 
+                  value={targetName}
+                  onChange={(e) => setTargetName(e.target.value)}
+                  style={{ width: '150px' }}
+                />
+                <button type="submit" className="join-btn" style={{ marginTop: 0, padding: '8px 16px' }}>Hívás</button>
+              </form>
             </div>
           )}
         </div>
