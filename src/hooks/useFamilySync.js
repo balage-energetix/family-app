@@ -8,6 +8,7 @@ export const useFamilySync = (roomId, userId) => {
   const [reactions, setReactions] = useState([]);
   const [connected, setConnected] = useState(false);
   const [activeSlot, setActiveSlot] = useState(null);
+  const [peerNames, setPeerNames] = useState({}); // Stores peerId -> name mapping
   
   const peerRef = useRef(null);
   const connectionsRef = useRef({}); 
@@ -28,7 +29,6 @@ export const useFamilySync = (roomId, userId) => {
         console.error('Media Access Denied', err);
       }
 
-      // Try 10 slots for better discovery
       for (let i = 1; i <= 10; i++) {
         const potentialId = `${roomId}-v2-slot-${i}`;
         const peer = new Peer(potentialId);
@@ -57,7 +57,7 @@ export const useFamilySync = (roomId, userId) => {
       setConnected(true);
 
       peer.on('call', (call) => {
-        if (callsRef.current[call.peer]) return; // Avoid duplicate calls
+        if (callsRef.current[call.peer]) return;
         call.answer(stream);
         call.on('stream', (remoteStream) => {
           addRemoteStream(call.peer, remoteStream);
@@ -69,7 +69,6 @@ export const useFamilySync = (roomId, userId) => {
         setupDataConnection(conn);
       });
 
-      // Aggressive discovery: try every 2 seconds
       const interval = setInterval(() => {
         for (let i = 1; i <= 10; i++) {
           if (i === mySlot) continue;
@@ -86,15 +85,11 @@ export const useFamilySync = (roomId, userId) => {
               addRemoteStream(otherId, remoteStream);
               callsRef.current[otherId] = call;
             });
-            call.on('error', () => {
-              delete callsRef.current[otherId];
-            });
           }
         }
-      }, 2000);
+      }, 2500);
 
       peer.on('close', () => clearInterval(interval));
-      peer.on('disconnected', () => peer.reconnect());
     };
 
     initPeer();
@@ -113,19 +108,22 @@ export const useFamilySync = (roomId, userId) => {
   };
 
   const setupDataConnection = (conn) => {
-    if (connectionsRef.current[conn.peer]) return;
+    if (connectionsRef.current[conn.peer]?.open) return;
     connectionsRef.current[conn.peer] = conn;
     
+    // Send our identity as soon as connected
+    conn.on('open', () => {
+      conn.send({ type: 'identity', name: userId });
+    });
+
     conn.on('data', (data) => {
-      if (data.type === 'chat') {
+      if (data.type === 'identity') {
+        setPeerNames(prev => ({ ...prev, [conn.peer]: data.name }));
+      } else if (data.type === 'chat') {
         setMessages(prev => [...prev, { ...data, timestamp: Date.now() }]);
       } else if (data.type === 'reaction') {
         setReactions(prev => [...prev, { ...data, id: Math.random(), timestamp: Date.now() }]);
       }
-    });
-
-    conn.on('close', () => {
-      delete connectionsRef.current[conn.peer];
     });
   };
 
@@ -152,6 +150,7 @@ export const useFamilySync = (roomId, userId) => {
     reactions,
     connected,
     activeSlot,
+    peerNames,
     sendMessage,
     sendReaction
   };

@@ -37,7 +37,7 @@ function App() {
 
   const { 
     localStream, remoteStreams, messages, reactions, 
-    connected, activeSlot, sendMessage, sendReaction 
+    connected, activeSlot, peerNames, sendMessage, sendReaction 
   } = useFamilySync(inCall ? roomId : null, userId);
 
   const handleJoin = () => {
@@ -126,7 +126,7 @@ function App() {
         <div className="video-grid">
           {localStream && <VideoTile stream={localStream} label={`${userId} (Te)`} isLocal={true} />}
           {remoteStreams.map(rs => (
-            <VideoTile key={rs.id} stream={rs.stream} label="Résztvevő" />
+            <VideoTile key={rs.id} stream={rs.stream} label={peerNames[rs.id] || 'Résztvevő'} />
           ))}
           {remoteStreams.length === 0 && (
             <div className="glass" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>
