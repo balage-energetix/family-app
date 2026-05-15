@@ -37,7 +37,7 @@ function App() {
 
   const { 
     localStream, remoteStreams, messages, reactions, 
-    connected, activeSlot, peerNames, sendMessage, sendReaction 
+    connected, activeSlot, peerNames, sendMessage, sendReaction, reconnect 
   } = useFamilySync(inCall ? roomId : null, userId);
 
   const handleJoin = () => {
@@ -87,7 +87,7 @@ function App() {
           <input 
             type="text" 
             className="chat-input" 
-            placeholder="Szoba neve (pl. csaladi-kor)" 
+            placeholder="Szoba neve (legyen közös!)" 
             value={roomId}
             onChange={(e) => setRoomId(e.target.value)}
           />
@@ -116,7 +116,7 @@ function App() {
               ● {connected ? 'Online' : 'Csatlakozás...'}
             </div>
             <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>
-              Szoba: {roomId} {activeSlot && `(#${activeSlot})`}
+              Szoba: {roomId} {activeSlot && `(v3-#${activeSlot})`}
             </div>
           </div>
         </div>
@@ -132,7 +132,13 @@ function App() {
             <div className="glass" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>
               <div style={{ marginBottom: '16px', fontSize: '1.2rem' }}>Várakozás a többiekre...</div>
               <div style={{ fontSize: '0.9rem' }}>A(z) "{roomId}" szobában vagy.</div>
-              <div style={{ fontSize: '0.8rem', marginTop: '8px' }}>Győződj meg róla, hogy mindenki ugyanezt a szobanevet írta be!</div>
+              <button 
+                onClick={reconnect}
+                className="join-btn" 
+                style={{ width: 'auto', padding: '8px 20px', marginTop: '20px', fontSize: '0.9rem' }}
+              >
+                Újracsatlakozás
+              </button>
             </div>
           )}
         </div>
