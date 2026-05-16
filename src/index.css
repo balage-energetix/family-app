@@ -153,18 +153,34 @@ html, body, #root {
   grid-template-rows: 1fr;
 }
 
-/* Mobile: 1 column stacked */
+/* Mobile: 1 column stacked, fitting the screen */
 @media (max-width: 768px) {
-  .main-area { padding: 8px; padding-bottom: calc(var(--ctrl-h) + 16px); }
+  .main-area { 
+    padding: 10px; 
+    padding-bottom: calc(var(--ctrl-h) + 20px); 
+    display: flex;
+    flex-direction: column;
+  }
   .video-grid.fixed-grid-3 {
     grid-template-columns: 1fr;
     grid-template-rows: repeat(3, 1fr);
-    gap: 8px;
-    align-content: start;
-    overflow-y: auto;
+    gap: 10px;
+    height: 100%;
+    align-content: stretch;
   }
   .video-tile {
-    aspect-ratio: 16/10; /* Slightly taller for mobile stacking */
+    aspect-ratio: auto;
+    width: 92%;
+    justify-self: center;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+  }
+  .video-info {
+    bottom: 6px; left: 6px;
+    padding: 3px 10px;
+    font-size: 0.7rem;
+  }
+  .empty-placeholder span {
+    font-size: 0.65rem;
   }
 }
 
