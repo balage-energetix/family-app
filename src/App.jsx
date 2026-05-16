@@ -8,12 +8,36 @@ import { useFamilySync } from './hooks/useFamilySync';
 import './index.css';
 
 // ─── Video Tile ───────────────────────────────────────
-const VideoTile = ({ stream, label, isLocal, muted }) => {
+const VideoTile = ({ stream, label, isLocal, muted, isEmpty }) => {
   const ref = useRef();
-  useEffect(() => { if (ref.current && stream) ref.current.srcObject = stream; }, [stream]);
+  useEffect(() => { 
+    if (ref.current && stream) {
+      ref.current.srcObject = stream;
+    } else if (ref.current) {
+      ref.current.srcObject = null;
+    }
+  }, [stream]);
+
+  if (isEmpty) {
+    return (
+      <div className="video-tile glass empty">
+        <div className="empty-placeholder">
+          <Users size={32} className="pulse" />
+          <span>Várakozás...</span>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="video-tile glass">
-      <video ref={ref} autoPlay playsInline muted={isLocal || muted} />
+    <div className={`video-tile glass ${isLocal ? 'local' : ''}`}>
+      {stream ? (
+        <video ref={ref} autoPlay playsInline muted={isLocal || muted} />
+      ) : (
+        <div className="loading-stream">
+          <Loader size={24} className="spin" />
+        </div>
+      )}
       <div className="video-info">
         {isLocal ? <Video size={13} /> : <Users size={13} />}
         <span>{label}</span>
@@ -129,20 +153,18 @@ export default function App() {
       </header>
 
       <div className="main-area">
-        <div className={`video-grid participants-${1 + remoteStreams.length}`}>
-          <VideoTile stream={localStream} label={`${session.name} (Te)`} isLocal muted={isMuted} />
-          {remoteStreams.map(rs => (
-            <VideoTile key={rs.id} stream={rs.stream} label={peerNames[rs.id] || 'Csatlakozó...'} />
+        <div className="video-grid fixed-grid">
+          {[
+            { stream: localStream, label: `${session.name} (Te)`, isLocal: true, muted: isMuted },
+            ...Array(3).fill(null).map((_, i) => {
+              const rs = remoteStreams[i];
+              return rs 
+                ? { stream: rs.stream, label: peerNames[rs.id] || 'Csatlakozó...', isLocal: false }
+                : { isEmpty: true };
+            })
+          ].map((slot, i) => (
+            <VideoTile key={i} {...slot} />
           ))}
-          {remoteStreams.length === 0 && peerStatus === 'online' && (
-            <div className="waiting-overlay">
-              <div className="waiting-content glass">
-                <Loader size={24} className="spin" />
-                <span>Várakozás a többiekre...</span>
-                <p>Oszd meg a szoba nevét: <strong>{session.room}</strong></p>
-              </div>
-            </div>
-          )}
         </div>
 
         {showChat && (
