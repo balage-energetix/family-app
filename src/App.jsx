@@ -70,29 +70,51 @@ export default function App() {
   const startCamera = async () => {
     setCameraLoading(true);
     setCameraError(null);
+    
+    // Kényszerített tisztítás előtte
+    if (localStream) {
+      localStream.getTracks().forEach(t => t.stop());
+    }
+
+    const tryGetStream = async (constraints) => {
+      try {
+        return await navigator.mediaDevices.getUserMedia(constraints);
+      } catch (e) {
+        console.warn("Próbálkozás hibával:", constraints, e);
+        throw e;
+      }
+    };
+
     try {
-      // Megpróbáljuk az ideális beállításokkal
-      const stream = await navigator.mediaDevices.getUserMedia({
+      // 1. Próbálkozás: Ideális beállítások
+      const stream = await tryGetStream({
         video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' },
         audio: { echoCancellation: true, noiseSuppression: true },
       });
       setLocalStream(stream);
     } catch (err) {
-      console.error("Kamera hiba:", err);
       try {
-        // Ha nem sikerült, megpróbáljuk alapértelmezett beállításokkal (hátha a felbontás a baj)
-        const fallbackStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-        setLocalStream(fallbackStream);
+        // 2. Próbálkozás: Alapértelmezett videó + audió
+        const fallback1 = await tryGetStream({ video: true, audio: true });
+        setLocalStream(fallback1);
       } catch (err2) {
-        let msg = 'Kamera hozzáférés megtagadva.';
-        if (err2.name === 'NotReadableError' || err2.name === 'TrackStartError') {
-          msg = 'A kamera már használatban van egy másik programban.';
-        } else if (err2.name === 'NotFoundError' || err2.name === 'DevicesNotFoundError') {
-          msg = 'Nem található kamera az eszközön.';
-        } else {
-          msg = 'Kamera hiba: ' + (err2.message || 'Ismeretlen hiba');
+        try {
+          // 3. Próbálkozás: Csak videó (hátha a mikrofon foglalt)
+          const fallback2 = await tryGetStream({ video: true, audio: false });
+          setLocalStream(fallback2);
+          setCameraError("Csak kép van, a mikrofon nem elérhető.");
+        } catch (err3) {
+          let msg = 'Kamera hozzáférés megtagadva.';
+          const errorName = err3.name || err.name;
+          if (errorName === 'NotReadableError' || errorName === 'TrackStartError') {
+            msg = 'A kamera/mikrofon már használatban van. Zárd be a többi videós appot (Messenger, Zoom stb.)!';
+          } else if (errorName === 'NotFoundError' || errorName === 'DevicesNotFoundError') {
+            msg = 'Nem található kamera az eszközön.';
+          } else {
+            msg = `Hiba (${errorName}): Ellenőrizd a kamera csatlakozását!`;
+          }
+          setCameraError(msg);
         }
-        setCameraError(msg);
       }
     } finally {
       setCameraLoading(false);
@@ -103,7 +125,11 @@ export default function App() {
     if (session && !localStream) startCamera();
   }, [session]);
 
-  useEffect(() => () => localStream?.getTracks().forEach(t => t.stop()), [localStream]);
+  useEffect(() => () => {
+    if (localStream) {
+      localStream.getTracks().forEach(t => t.stop());
+    }
+  }, [localStream]);
 
   const toggleMute = () => {
     localStream?.getAudioTracks().forEach(t => (t.enabled = isMuted));
