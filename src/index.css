@@ -148,19 +148,23 @@ html, body, #root {
   height: 100%;
 }
 
-.video-grid.fixed-grid {
-  grid-template-columns: repeat(2, 1fr);
-  grid-template-rows: repeat(2, 1fr);
+.video-grid.fixed-grid-3 {
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: 1fr;
 }
 
-/* Mobile: also 2 columns as requested "legyen kisebb" */
-@media (max-width: 640px) {
-  .main-area { padding: 12px; padding-bottom: calc(var(--ctrl-h) + 12px); }
-  .video-grid.fixed-grid {
-    grid-template-columns: repeat(2, 1fr);
-    grid-template-rows: repeat(2, 1fr);
-    gap: 10px;
-    align-content: center;
+/* Mobile: 1 column stacked */
+@media (max-width: 768px) {
+  .main-area { padding: 8px; padding-bottom: calc(var(--ctrl-h) + 16px); }
+  .video-grid.fixed-grid-3 {
+    grid-template-columns: 1fr;
+    grid-template-rows: repeat(3, 1fr);
+    gap: 8px;
+    align-content: start;
+    overflow-y: auto;
+  }
+  .video-tile {
+    aspect-ratio: 16/10; /* Slightly taller for mobile stacking */
   }
 }
 

@@ -200,10 +200,10 @@ export default function App() {
       </header>
 
       <div className="main-area">
-        <div className="video-grid fixed-grid">
+        <div className="video-grid fixed-grid-3">
           {[
             { stream: localStream, label: `${session.name} (Te)`, isLocal: true, muted: isMuted },
-            ...Array(3).fill(null).map((_, i) => {
+            ...Array(2).fill(null).map((_, i) => {
               const rs = remoteStreams[i];
               return rs 
                 ? { stream: rs.stream, label: peerNames[rs.id] || 'Csatlakozó...', isLocal: false }
