@@ -156,27 +156,32 @@ html, body, #root {
 /* Mobile: 1 column stacked, fitting the screen */
 @media (max-width: 768px) {
   .main-area { 
-    padding: 10px; 
-    padding-bottom: calc(var(--ctrl-h) + 35px); /* Increased to prevent overlap */
+    padding: 15px; 
+    padding-bottom: calc(var(--ctrl-h) + 55px); /* Significant padding for controls */
     flex: 1;
     min-height: 0;
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    justify-content: center; /* Center windows vertically */
   }
   .video-grid.fixed-grid-3 {
     grid-template-columns: 1fr;
     grid-template-rows: repeat(3, 1fr);
-    gap: 12px;
+    gap: 15px;
     height: 100%;
+    max-height: 72vh; /* Hard limit to ensure it fits on any screen */
     flex: 1;
+    margin: 0 auto;
+    width: 100%;
   }
   .video-tile {
     aspect-ratio: auto;
-    width: 90%;
+    width: 82%; /* Much smaller width */
     height: 100%;
     justify-self: center;
     box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+    border-radius: 16px; /* Slightly smaller radius for smaller windows */
   }
   .video-info {
     bottom: 6px; left: 6px;
