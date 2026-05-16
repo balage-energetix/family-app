@@ -67,19 +67,40 @@ export default function App() {
 
   useEffect(() => { chatRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
-  useEffect(() => {
-    if (!session || localStream) return;
+  const startCamera = async () => {
     setCameraLoading(true);
     setCameraError(null);
-    navigator.mediaDevices.getUserMedia({
-      video: { width: { ideal: 1280 }, height: { ideal: 720 } },
-      audio: { echoCancellation: true, noiseSuppression: true },
-    })
-      .then(stream => { setLocalStream(stream); setCameraLoading(false); })
-      .catch(err => {
-        setCameraLoading(false);
-        setCameraError('Kamera hozzáférés kell a híváshoz. Engedélyezd a böngészőben!');
+    try {
+      // Megpróbáljuk az ideális beállításokkal
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' },
+        audio: { echoCancellation: true, noiseSuppression: true },
       });
+      setLocalStream(stream);
+    } catch (err) {
+      console.error("Kamera hiba:", err);
+      try {
+        // Ha nem sikerült, megpróbáljuk alapértelmezett beállításokkal (hátha a felbontás a baj)
+        const fallbackStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        setLocalStream(fallbackStream);
+      } catch (err2) {
+        let msg = 'Kamera hozzáférés megtagadva.';
+        if (err2.name === 'NotReadableError' || err2.name === 'TrackStartError') {
+          msg = 'A kamera már használatban van egy másik programban.';
+        } else if (err2.name === 'NotFoundError' || err2.name === 'DevicesNotFoundError') {
+          msg = 'Nem található kamera az eszközön.';
+        } else {
+          msg = 'Kamera hiba: ' + (err2.message || 'Ismeretlen hiba');
+        }
+        setCameraError(msg);
+      }
+    } finally {
+      setCameraLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (session && !localStream) startCamera();
   }, [session]);
 
   useEffect(() => () => localStream?.getTracks().forEach(t => t.stop()), [localStream]);
@@ -119,7 +140,7 @@ export default function App() {
           {cameraLoading ? <Loader size={40} className="spin" /> : <AlertCircle size={40} color="#ef4444" />}
           <h2 style={{ marginTop: 20 }}>{cameraError ? 'Hiba' : 'Kamera indítása...'}</h2>
           <p style={{ marginTop: 10, color: 'var(--muted)' }}>{cameraError || 'Kérlek engedélyezd a kamerát a böngészőben.'}</p>
-          {cameraError && <button className="join-btn" onClick={() => window.location.reload()}>Újra</button>}
+          {cameraError && <button className="join-btn" onClick={startCamera}>Újra</button>}
         </div>
       </div>
     );
