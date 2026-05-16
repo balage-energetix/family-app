@@ -49,7 +49,7 @@ const VideoTile = ({ stream, label, isLocal, muted, isEmpty }) => {
 // ─── Main App ─────────────────────────────────────────
 export default function App() {
   const [name, setName] = useState('');
-  const [room, setRoom] = useState('csaladi-kor');
+  const [room] = useState('csaladi-kor');
   const [session, setSession] = useState(null);
 
   const [localStream, setLocalStream] = useState(null);
@@ -152,7 +152,6 @@ export default function App() {
           <h1>Üdvözlünk!</h1>
           <p className="join-subtitle">Lépj be a közös szobába.</p>
           <input className="join-input" placeholder="A te neved" value={name} onChange={e => setName(e.target.value)} autoFocus required />
-          <input className="join-input" placeholder="Szoba neve" value={room} onChange={e => setRoom(e.target.value)} required />
           <button type="submit" className="join-btn">Belépés</button>
         </form>
       </div>

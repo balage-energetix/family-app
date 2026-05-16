@@ -157,22 +157,26 @@ html, body, #root {
 @media (max-width: 768px) {
   .main-area { 
     padding: 10px; 
-    padding-bottom: calc(var(--ctrl-h) + 20px); 
+    padding-bottom: calc(var(--ctrl-h) + 35px); /* Increased to prevent overlap */
+    flex: 1;
+    min-height: 0;
     display: flex;
     flex-direction: column;
+    overflow: hidden;
   }
   .video-grid.fixed-grid-3 {
     grid-template-columns: 1fr;
     grid-template-rows: repeat(3, 1fr);
-    gap: 10px;
+    gap: 12px;
     height: 100%;
-    align-content: stretch;
+    flex: 1;
   }
   .video-tile {
     aspect-ratio: auto;
-    width: 92%;
+    width: 90%;
+    height: 100%;
     justify-self: center;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.4);
   }
   .video-info {
     bottom: 6px; left: 6px;
