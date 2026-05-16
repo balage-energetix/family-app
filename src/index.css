@@ -149,40 +149,52 @@ html, body, #root {
 }
 
 .video-grid.fixed-grid-3 {
-  grid-template-columns: repeat(3, 1fr);
-  grid-template-rows: 1fr;
+  display: grid;
+  gap: 12px;
+  width: 100%;
+  height: 100%;
+  /* Default: Mobile Stacked */
+  grid-template-columns: 1fr;
+  grid-template-rows: repeat(3, 1fr);
 }
 
-/* Mobile: 1 column stacked, fitting the screen */
-@media (max-width: 768px) {
-  .main-area { 
-    padding: 10px; 
-    padding-bottom: calc(var(--ctrl-h) + 25px); 
-    flex: 1;
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    justify-content: center;
+.main-area { 
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 12px;
+  padding-bottom: calc(var(--ctrl-h) + 25px);
+  justify-content: center;
+}
+
+.video-tile {
+  aspect-ratio: auto;
+  width: 80%;
+  height: 100%;
+  justify-self: center;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+  border-radius: 12px;
+}
+
+/* Desktop: Side-by-side */
+@media (min-width: 769px) {
+  .main-area {
+    flex-direction: row;
+    padding: 16px;
+    padding-bottom: calc(var(--ctrl-h) + 16px);
   }
   .video-grid.fixed-grid-3 {
-    grid-template-columns: 1fr;
-    grid-template-rows: repeat(3, 1fr);
-    gap: 10px;
-    height: 100%;
-    max-height: 65vh;
-    flex: 1;
-    margin: 0 auto;
-    width: 100%;
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: 1fr;
   }
   .video-tile {
-    aspect-ratio: auto;
-    width: 76%; /* Even smaller width */
-    height: 100%;
-    justify-self: center;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
-    border-radius: 12px;
+    width: 100%;
   }
+}
+
+/* Additional Safari Fixes */
+@media (max-width: 768px) {
   .video-info {
     bottom: 4px; left: 4px;
     padding: 2px 8px;
